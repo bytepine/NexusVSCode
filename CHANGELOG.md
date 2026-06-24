@@ -7,6 +7,13 @@
 
 ## [Unreleased]
 
+## [1.3.7] - 2026-06-24
+
+- docs: README 独立仓自包含重写（架构图、安装配置、代理工具参考、FAQ、公开仓 Releases 链接）
+- fix: `package.json` 仓库 URL 修正为 `bytepine/NexusVSCode`；开发期 `version` 恢复 `0.0.0`
+- docs: 移除 README 中未实现的 stdio 传输描述
+- chore: 新增 `scripts/build_vscode.py` 与 GitHub Actions 构建工作流
+
 ## [1.3.6] - 2026-06-10
 
 - 修复扩展激活崩溃（`TOOLS_CALL_TIMEOUT_MS is not defined`），恢复 MCP 代理 6900 正常监听
