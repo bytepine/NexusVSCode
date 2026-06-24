@@ -7,6 +7,10 @@
 
 ## [Unreleased]
 
+### Changed
+
+- `nexusMcp.enabled` 默认值改为 `false`，与 NexusRider 一致；须手动开启后 MCP 服务器才会启动
+
 ## [1.3.7] - 2026-06-24
 
 - docs: README 独立仓自包含重写（架构图、安装配置、代理工具参考、FAQ、公开仓 Releases 链接）

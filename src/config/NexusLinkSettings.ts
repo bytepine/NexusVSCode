@@ -19,7 +19,7 @@ const SECTION = "nexusMcp";
 export function getConfig(): NexusLinkConfig {
     const cfg = vscode.workspace.getConfiguration(SECTION);
     return {
-        enabled: cfg.get<boolean>("enabled", true),
+        enabled: cfg.get<boolean>("enabled", false),
         httpPort: cfg.get<number>("httpPort", 6900),
         scanPortStart: cfg.get<number>("scanPortStart", 45000),
         scanPortEnd: cfg.get<number>("scanPortEnd", 45100),

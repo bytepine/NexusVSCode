@@ -25,7 +25,7 @@
       "properties": {
         "nexusMcp.enabled": {
           "type": "boolean",
-          "default": true,
+          "default": false,
           "description": "启用 Nexus MCP 代理服务器"
         },
         "nexusMcp.httpPort": {

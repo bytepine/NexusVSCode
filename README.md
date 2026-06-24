@@ -122,7 +122,7 @@ sequenceDiagram
 
 ## 安装与使用
 
-> **激活即启**：扩展在 VSCode/Cursor 启动完成后自动激活（`onStartupFinished`）。`nexusMcp.enabled` 默认为 `true`，无需打开特定工作区文件夹。
+> **须开启总开关**：扩展在 VSCode/Cursor 启动完成后自动激活（`onStartupFinished`），但 MCP HTTP 服务器**默认不启动**。须在 **Settings** 中将 `nexusMcp.enabled` 设为 `true`（见下方 [安装扩展](#2-安装扩展)）后才会监听端口；改为 `false` 后立即停止，改回 `true` 热启动，无需重载窗口。
 
 ### 1. UE 前置条件
 
@@ -139,7 +139,8 @@ NexusLink 的 MCP HTTP/WebSocket **默认不启动**，须在 UE 中手动开启
 
 1. 从 [NexusVSCode Releases](https://github.com/bytepine/NexusVSCode/releases) 下载 `nexus-mcp-vscode-<version>.vsix`，或 [本地构建](#本地构建与开发)
 2. VSCode / Cursor → **Extensions: Install from VSIX...** → 选择 `.vsix`
-3. 重载窗口后扩展自动启动（默认端口 `6900`）
+3. 重载窗口
+4. **Settings** → 搜索 `nexusMcp` → 将 **Nexus Mcp: Enabled** 设为 `true`（默认关闭；开启后立即启动，默认端口 `6900`）
 
 ### 3. 配置项
 
@@ -147,7 +148,7 @@ NexusLink 的 MCP HTTP/WebSocket **默认不启动**，须在 UE 中手动开启
 
 | 配置键 | 默认值 | 说明 |
 |--------|--------|------|
-| `nexusMcp.enabled` | `true` | 总开关；改为 `false` 后立即停止，改回 `true` 热启动，无需重载窗口 |
+| `nexusMcp.enabled` | `false` | 总开关；改为 `true` 后立即启动、改为 `false` 后立即停止，无需重载窗口 |
 | `nexusMcp.httpPort` | `6900` | AI 客户端连接端口；修改后需重载窗口或关开 `enabled` |
 | `nexusMcp.scanPortStart` | `45000` | UE 实例扫描起始端口 |
 | `nexusMcp.scanPortEnd` | `45100` | UE 实例扫描结束端口 |
@@ -263,7 +264,7 @@ NexusLink 的 MCP HTTP/WebSocket **默认不启动**，须在 UE 中手动开启
 
 ## AI 客户端配置
 
-默认端点 `http://127.0.0.1:6900/stream`。若 MCP 端口被占用自动顺延，以扩展启动通知中的实际端口为准。也可通过命令面板 **Nexus MCP: 复制 MCP 客户端配置** 一键复制。
+须先开启 `nexusMcp.enabled`（见 [安装扩展](#2-安装扩展)），MCP 服务器才会监听。默认端点 `http://127.0.0.1:6900/stream`。若 MCP 端口被占用自动顺延，以扩展启动通知中的实际端口为准。也可通过命令面板 **Nexus MCP: 复制 MCP 客户端配置** 一键复制。
 
 **Cursor**（`~/.cursor/mcp.json`，Streamable HTTP）：
 
