@@ -1,0 +1,35 @@
+# ============================================
+# NexusVSCode — VSCode/Cursor 扩展 .gitignore
+# ============================================
+
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+out/
+*.vsix
+*.tsbuildinfo
+
+# VSCode extension test
+.vscode-test/
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS 生成文件
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# 本地环境
+.env
+.env.local
+.env.*.local
+
+# 编辑器
+.idea/
+*.iml

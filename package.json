@@ -1,0 +1,97 @@
+{
+  "name": "nexus-mcp-vscode",
+  "displayName": "Nexus MCP",
+  "description": "MCP 代理插件：自动发现并连接 Unreal Engine 实例，将 NexusLink 工具暴露给 AI 客户端",
+  "version": "1.3.1",
+  "publisher": "byteyang",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/user/NexusMCP"
+  },
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "configuration": {
+      "title": "Nexus MCP",
+      "properties": {
+        "nexusMcp.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "启用 Nexus MCP 代理服务器"
+        },
+        "nexusMcp.httpPort": {
+          "type": "number",
+          "default": 6900,
+          "minimum": 1024,
+          "maximum": 65535,
+          "description": "Streamable HTTP MCP 服务端口（AI 客户端通过此端口连接）"
+        },
+        "nexusMcp.scanPortStart": {
+          "type": "number",
+          "default": 45000,
+          "minimum": 1024,
+          "maximum": 65535,
+          "description": "UE 实例扫描起始端口"
+        },
+        "nexusMcp.scanPortEnd": {
+          "type": "number",
+          "default": 45100,
+          "minimum": 1024,
+          "maximum": 65535,
+          "description": "UE 实例扫描结束端口"
+        },
+        "nexusMcp.scanIntervalSeconds": {
+          "type": "number",
+          "default": 5,
+          "minimum": 1,
+          "maximum": 3600,
+          "description": "UE 实例自动扫描间隔（秒）"
+        }
+      }
+    },
+    "commands": [
+      {
+        "command": "nexus.refreshInstances",
+        "title": "Nexus MCP: 刷新 UE 实例"
+      },
+      {
+        "command": "nexus.selectInstance",
+        "title": "Nexus MCP: 选择 UE 实例"
+      },
+      {
+        "command": "nexus.disconnect",
+        "title": "Nexus MCP: 断开 UE 连接"
+      },
+      {
+        "command": "nexus.copyMcpConfig",
+        "title": "Nexus MCP: 复制 MCP 客户端配置"
+      }
+    ]
+  },
+  "scripts": {
+    "build": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --sourcemap",
+    "watch": "npm run build -- --watch",
+    "package": "vsce package",
+    "lint": "eslint src/"
+  },
+  "dependencies": {
+    "ws": "^8.18.2"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@types/vscode": "^1.85.0",
+    "@types/ws": "^8.5.14",
+    "@vscode/vsce": "^3.3.2",
+    "esbuild": "^0.25.4",
+    "typescript": "~5.7.3"
+  }
+}
