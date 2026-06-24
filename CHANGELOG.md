@@ -7,7 +7,14 @@
 
 ## [Unreleased]
 
-- chore: `package.json` description 改为英文（与 GitHub 仓库描述对齐）
+### Changed
+
+- `nexusMcp.enabled` 默认值改为 `false`，与 NexusRider 一致；须手动开启后 MCP 服务器才会启动
+- docs: 新增英文 README（README.en.md）与中英文顶部语言切换
+
+### Chore
+
+- `package.json` description 改为英文（与 GitHub 仓库描述对齐）
 
 ## [1.3.7] - 2026-06-24
 
