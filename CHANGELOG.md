@@ -7,6 +7,10 @@
 
 ## [Unreleased]
 
+### Chore
+
+- chore(ci): 新增 tag 触发 Release workflow，CI 自动打包并发布 GitHub Release
+
 ### Changed
 
 - `nexusMcp.enabled` 默认值改为 `false`，与 NexusRider 一致；须手动开启后 MCP 服务器才会启动
