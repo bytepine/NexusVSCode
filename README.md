@@ -318,6 +318,16 @@ npx vsce package --no-dependencies
 
 产物：`release/nexus-mcp-vscode-<version>.vsix` 或当前目录 `*.vsix`。
 
+### 发版（维护者）
+
+GitHub Release **正文唯一来源**为 `CHANGELOG.md` 的 `[X.Y.Z]` 段落（CI 经 `scripts/extract_release_notes.py --verify` 提取）。禁止网页手写 Release 说明或 `gh release create`。
+
+1. 归档 `[Unreleased]` → `[X.Y.Z] - YYYY-MM-DD`，更新 `VERSION`
+2. `py scripts/extract_release_notes.py --version X.Y.Z --verify`（预览 stdout，确认无误）
+3. `git commit` → `git tag -a nexus-vscode-vX.Y.Z` → `git push origin HEAD` + `git push origin nexus-vscode-vX.Y.Z`
+
+push tag 后 `.github/workflows/release.yml` 打包 `nexus-mcp-vscode-<ver>.vsix` 并发布 Release。
+
 ### 开发调试
 
 ```bash

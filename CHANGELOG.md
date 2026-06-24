@@ -11,6 +11,11 @@
 
 - chore(ci): 新增 tag 触发 Release workflow，CI 自动打包并发布 GitHub Release
 
+### Chore
+
+- chore(ci): Release 强制 `--verify` 门禁，正文仅来源于 CHANGELOG 段落（禁手写 Release 说明）
+- docs: README 补充发版流程（与 NexusLink / NexusRider 一致）
+
 ### Changed
 
 - `nexusMcp.enabled` 默认值改为 `false`，与 NexusRider 一致；须手动开启后 MCP 服务器才会启动
