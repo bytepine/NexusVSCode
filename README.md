@@ -1,5 +1,7 @@
 # nexus-vscode — VSCode / Cursor MCP 代理扩展
 
+**语言 / Language**: **简体中文** · [English](README.en.md)
+
 **当前版本：1.3.7** · 扩展 ID：`byteyang.nexus-mcp-vscode`
 
 VSCode / Cursor 端 MCP **代理**扩展：在本地运行独立 MCP HTTP 服务器（默认 `:6900`），自动发现 UE 实例，经 WebSocket 将 AI 工具调用转发给 **NexusLink** UE 插件。蓝图、资产、PIE 等具体能力均由 UE 侧 NexusLink 提供，本扩展不实现游戏逻辑。
