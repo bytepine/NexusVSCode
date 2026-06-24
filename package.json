@@ -1,7 +1,7 @@
 {
   "name": "nexus-mcp-vscode",
   "displayName": "Nexus MCP",
-  "description": "MCP 代理插件：自动发现并连接 Unreal Engine 实例，将 NexusLink 工具暴露给 AI 客户端",
+  "description": "MCP proxy for VS Code / Cursor: auto-discovers UE instances and exposes NexusLink tools to AI clients",
   "version": "0.0.0",
   "publisher": "byteyang",
   "license": "MIT",
