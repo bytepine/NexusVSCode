@@ -277,6 +277,12 @@ export class NexusMcpDispatcher {
             return makeError(id, INVALID_PARAMS, `Invalid port: ${port}`);
         }
         const success = await this.unrealManager.connectTo(port, true);
+        if (success) {
+            // 连接成功后主动预热工具缓存并推送 tools/list_changed；
+            // extension.ts 的 connectionChanged 监听不覆盖此路径（手动连接 bypass 了 discoverInstances）。
+            try { await this.unrealManager.fetchToolsList(); } catch { /* ignore */ }
+            this.onSessionReady?.();
+        }
         const msg = success
             ? `已连接到 UE 实例 (端口 ${port})`
             : `连接失败：端口 ${port} 无响应`;
