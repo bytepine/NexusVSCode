@@ -7,6 +7,8 @@
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-06-26
+
 - docs(store): 新增商店专用 `README.marketplace.md`（中英双语、中文在前），VS Code Marketplace / Open VSX 详情页内容与仓库 README 解耦（参考 NexusRider 插件页风格）
 - chore(script): `build_vscode.py` 打包时临时以 `README.marketplace.md` 覆盖 `README.md`、打包后还原；`read_file`/`write_file` 改为保留原始行尾（`newline=""`），避免本地构建弄脏 git 工作区
 - feat(unreal): `runDiscovery` 自动连接改为无 Editor 实例时直连 `found[0]`（与 Rider 策略对齐）；`netRole` 匹配改为大小写不敏感
