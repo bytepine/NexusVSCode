@@ -7,6 +7,10 @@
 
 ## [Unreleased]
 
+## [1.4.1] - 2026-06-26
+
+- docs: `README.marketplace.md` 双语顺序改为英文在前、中文在后，满足商店校验要求
+
 ## [1.4.0] - 2026-06-26
 
 - docs(store): 新增商店专用 `README.marketplace.md`（中英双语、中文在前），VS Code Marketplace / Open VSX 详情页内容与仓库 README 解耦（参考 NexusRider 插件页风格）
