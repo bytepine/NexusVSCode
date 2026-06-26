@@ -12,6 +12,10 @@ jobs:
   release:
     name: nexus-vscode
     runs-on: ubuntu-latest
+    env:
+      # 配置在仓库 Settings > Secrets 后才会发布到对应商店；缺失则跳过该步骤
+      OVSX_TOKEN: ${{ secrets.OVSX_TOKEN }}
+      VSCE_PAT: ${{ secrets.VSCE_PAT }}
     steps:
       - uses: actions/checkout@v4
 
@@ -65,3 +69,19 @@ jobs:
           files: release/nexus-mcp-vscode-${{ steps.meta.outputs.version }}.vsix
           generate_release_notes: false
           overwrite: true
+
+      # 覆盖 Cursor / CodeBuddy / Windsurf / VSCodium 等（默认走 Open VSX）
+      - name: Publish to Open VSX
+        if: ${{ env.OVSX_TOKEN != '' }}
+        run: >-
+          npx -y ovsx publish
+          release/nexus-mcp-vscode-${{ steps.meta.outputs.version }}.vsix
+          -p "$OVSX_TOKEN"
+
+      # 覆盖微软官方 VS Code
+      - name: Publish to VS Code Marketplace
+        if: ${{ env.VSCE_PAT != '' }}
+        run: >-
+          npx -y @vscode/vsce publish
+          --packagePath release/nexus-mcp-vscode-${{ steps.meta.outputs.version }}.vsix
+          -p "$VSCE_PAT"

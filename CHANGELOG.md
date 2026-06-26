@@ -7,24 +7,22 @@
 
 ## [Unreleased]
 
-### Chore
-
-- chore: 新增扩展图标 `icon.png`（128×128），并在 `package.json` 声明 `icon` 字段，Marketplace 详情页显示统一品牌图标
-- chore(ci): 新增 tag 触发 Release workflow，CI 自动打包并发布 GitHub Release
-
-### Chore
-
-- chore(ci): Release 强制 `--verify` 门禁，正文仅来源于 CHANGELOG 段落（禁手写 Release 说明）
-- docs: README 补充发版流程（与 NexusLink / NexusRider 一致）
+## [1.3.8] - 2026-06-26
 
 ### Changed
 
 - `nexusMcp.enabled` 默认值改为 `false`，与 NexusRider 一致；须手动开启后 MCP 服务器才会启动
-- docs: 新增英文 README（README.en.md）与中英文顶部语言切换
 
 ### Chore
 
-- `package.json` description 改为英文（与 GitHub 仓库描述对齐）
+- chore(ci): Release workflow 打 tag 后自动发布到 Open VSX（覆盖 Cursor/CodeBuddy/Windsurf）与 VS Code Marketplace；分别用 secret `OVSX_TOKEN` / `VSCE_PAT` 控制，缺失则跳过
+- chore: `package.json` 补充 `keywords` 与 `AI` 分类，提升商店搜索可见性
+- chore: 新增扩展图标 `icon.png`（128×128），并在 `package.json` 声明 `icon` 字段，Marketplace 详情页显示统一品牌图标
+- chore(ci): 新增 tag 触发 Release workflow，CI 自动打包并发布 GitHub Release
+- chore(ci): Release 强制 `--verify` 门禁，正文仅来源于 CHANGELOG 段落（禁手写 Release 说明）
+- docs: README 补充发版流程（与 NexusLink / NexusRider 一致）
+- docs: 新增英文 README（README.en.md）与中英文顶部语言切换
+- chore: `package.json` description 改为英文（与 GitHub 仓库描述对齐）
 
 ## [1.3.7] - 2026-06-24
 

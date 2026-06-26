@@ -14,7 +14,18 @@
     "vscode": "^1.85.0"
   },
   "categories": [
+    "AI",
     "Other"
+  ],
+  "keywords": [
+    "unreal engine",
+    "unreal",
+    "ue",
+    "mcp",
+    "model context protocol",
+    "ai",
+    "cursor",
+    "game development"
   ],
   "activationEvents": [
     "onStartupFinished"
