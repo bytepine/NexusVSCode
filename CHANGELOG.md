@@ -9,6 +9,7 @@
 
 ### Chore
 
+- chore: 新增扩展图标 `icon.png`（128×128），并在 `package.json` 声明 `icon` 字段，Marketplace 详情页显示统一品牌图标
 - chore(ci): 新增 tag 触发 Release workflow，CI 自动打包并发布 GitHub Release
 
 ### Chore
