@@ -5,6 +5,10 @@
 # Dependencies
 node_modules/
 
+# Python (打包脚本缓存)
+__pycache__/
+*.pyc
+
 # Build output
 release/
 dist/
