@@ -9,6 +9,24 @@
 
 - docs(store): 新增商店专用 `README.marketplace.md`（中英双语、中文在前），VS Code Marketplace / Open VSX 详情页内容与仓库 README 解耦（参考 NexusRider 插件页风格）
 - chore(script): `build_vscode.py` 打包时临时以 `README.marketplace.md` 覆盖 `README.md`、打包后还原；`read_file`/`write_file` 改为保留原始行尾（`newline=""`），避免本地构建弄脏 git 工作区
+- feat(unreal): `runDiscovery` 自动连接改为无 Editor 实例时直连 `found[0]`（与 Rider 策略对齐）；`netRole` 匹配改为大小写不敏感
+- feat(mcp): `handleInitialize` 先取已缓存 `upstreamInstructions`，UE 临时离线时仍回最近一次 instructions
+- feat(mcp): `NexusMcpDispatcher` 暴露 `isWaitingForInitialize` 只读属性；`handlePost` 新建会话后清理其余处于 WaitingForInitialize 的陈旧会话
+- fix(mcp): `OPTIONS` 预检去除 `/status` 路径（代理不提供 /status，属残留）
+- feat(ui): `copyMcpConfig` 升级为先 QuickPick 选传输协议（Streamable HTTP / SSE），再复制含 Cursor + CodeBuddy/Windsurf 的多客户端配置片段（与 Rider 配置面板对齐）
+- fix(mcp): `handlePost` 改用 JSON 解析判定 `initialize`，避免工具参数含该子串时误判新建无用会话（失败回退原 `includes` 保持容错）
+- feat(mcp): `httpSessions` 超 50 条时按插入序淘汰最旧的非当前会话，防客户端循环重连导致内存增长
+- perf(unreal): `scanPortsParallel` 改为按批（20 个/批）分片并发，避免大范围扫描耗尽文件描述符（与 Rider 线程池上限对齐）
+- feat(ui): 状态栏 tooltip 补充 MCP 服务器端点地址（stream / sse），与 Rider 对齐；`extension.ts` 启动后将实际端口注入 `StatusBarWidget`
+- feat(ui): 服务器就绪提示改为状态栏消息（5s 自动消失），减少弹窗噪音；错误弹窗保留
+- feat(mcp): `NexusMcpDispatcher` 版本号改为运行时读取 `context.extension.packageJSON.version`，打包后 `serverInfo.version` 即真实版本号
+- feat(mcp): SSE 长连接每 20s 写注释心跳帧 `: keepalive`，write 失败即清理死连接，避免经反代/NAT idle 被断开导致 `tools/list_changed` 推送丢失
+- fix(mcp): 顶层 404 分支补 `addCorsHeaders`，与其余错误响应行为一致，避免浏览器端客户端报 CORS 掩盖真实 404
+- fix(unreal): `probeStatus` 响应体加 64KB 读取上限，超限时销毁请求并返回 null，防异常端口返回超大 body 占内存
+- perf(mcp): `handleInitialize` 预热加 2s 上限（`INITIALIZE_WARMUP_MS`）；超时先返回 prefix，后台继续 `maintainConnection`，避免全端口扫描阻塞握手
+- perf(unreal): `forwardToolCallToPort` 优先用最近扫描的 `instances` 缓存解析 `wsPort`，缓存缺失时才回退 `probeStatus`，省跨实例并发查询的冗余 HTTP 往返
+- feat: 新增 `src/util/logger.ts` OutputChannel 日志单例（`Nexus MCP` 通道），`activate` 初始化；接入关键路径：端口占用/启动失败/连接变化/WS 发送失败/断线重扫
+- feat: `startAll` 检测 `httpPort ∈ [scanStart, scanEnd]` 时弹出 Warning + 写日志，防误配导致代理端口被当 UE 实例探测
 
 ## [1.3.9] - 2026-06-26
 

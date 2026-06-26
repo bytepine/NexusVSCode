@@ -63,16 +63,25 @@ export async function showInstancePicker(manager: UnrealInstanceManager): Promis
     }
 }
 
+function buildStreamConfig(port: number): string {
+    return `# ── CodeBuddy / Windsurf ──────────────────────────────────\n# 配置路径：自定义 MCP → 粘贴到 mcpServers 节点下\n"Nexus": {\n  "url": "http://127.0.0.1:${port}/stream",\n  "transportType": "streamable-http",\n  "description": "NexusLink MCP Server for Unreal Engine",\n  "disabled": false\n}\n\n# ── Cursor ────────────────────────────────────────────────\n# 配置路径：~/.cursor/mcp.json → mcpServers 节点下\n"nexus-unreal": {\n  "url": "http://127.0.0.1:${port}/stream"\n}`;
+}
+
+function buildSseConfig(port: number): string {
+    return `# ── CodeBuddy / Windsurf ──────────────────────────────────\n# 配置路径：自定义 MCP → 粘贴到 mcpServers 节点下\n"Nexus": {\n  "url": "http://127.0.0.1:${port}/sse",\n  "disabled": false\n}\n\n# ── Cursor ────────────────────────────────────────────────\n# 配置路径：~/.cursor/mcp.json → mcpServers 节点下\n"nexus-unreal": {\n  "url": "http://127.0.0.1:${port}/sse"\n}`;
+}
+
 /**
- * 将 MCP 客户端配置 JSON 复制到剪贴板。
+ * 先 QuickPick 选传输协议，再将对应 MCP 客户端配置片段复制到剪贴板（与 Rider 配置面板对齐）。
  */
 export async function copyMcpConfig(port: number): Promise<void> {
-    const config = JSON.stringify({
-        "nexus-unreal": {
-            url: `http://127.0.0.1:${port}/stream`,
-        },
-    }, null, 2);
+    const choice = await vscode.window.showQuickPick(
+        ["Streamable HTTP（推荐）", "SSE"],
+        { title: "选择 MCP 传输协议", placeHolder: "Streamable HTTP 兼容 Cursor / CodeBuddy / Windsurf" }
+    );
+    if (!choice) { return; }
 
+    const config = choice.startsWith("SSE") ? buildSseConfig(port) : buildStreamConfig(port);
     await vscode.env.clipboard.writeText(config);
     vscode.window.showInformationMessage("MCP 客户端配置已复制到剪贴板");
 }

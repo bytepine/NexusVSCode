@@ -1,6 +1,6 @@
 // Copyright byteyang. All Rights Reserved.
 
-import { UnrealInstanceManager } from "../unreal/UnrealInstanceManager";
+import { UnrealInstanceManager, type WsRequestResult } from "../unreal/UnrealInstanceManager";
 
 /**
  * MCP 会话状态。
@@ -20,7 +20,9 @@ const INTERNAL_ERROR = -32603;
 
 const PROTOCOL_VERSION = "2025-06-18";
 const SERVER_NAME = "Nexus-VSCode";
-const SERVER_VERSION = "0.0.0";
+
+/** initialize 握手时 UE 预热的最大等待时间，超时先返回 prefix，后台继续。 */
+const INITIALIZE_WARMUP_MS = 2000;
 
 /**
  * MCP JSON-RPC 2.0 分发器。
@@ -33,10 +35,19 @@ export class NexusMcpDispatcher {
 
     private state = McpSessionState.WaitingForInitialize;
 
+    get isWaitingForInitialize(): boolean {
+        return this.state === McpSessionState.WaitingForInitialize;
+    }
+
+    /** initialize 握手时 UE 预热的最大等待时间（模块级常量镜像，供测试覆盖）。 */
+    static readonly INITIALIZE_WARMUP_MS = INITIALIZE_WARMUP_MS;
+
     constructor(
         private readonly unrealManager: UnrealInstanceManager,
         /** MCP 会话进入 Running 后回调，用于向 SSE 客户端推送 tools/list_changed。 */
         private readonly onSessionReady?: () => void,
+        /** 插件版本号，运行时由 extension.ts 从 packageJSON 读取后注入。 */
+        private readonly serverVersion = "0.0.0",
     ) {}
 
     /**
@@ -103,16 +114,26 @@ export class NexusMcpDispatcher {
         const clientVersion = (params?.protocolVersion as string) ?? "";
         const negotiatedVersion = clientVersion || PROTOCOL_VERSION;
 
-        // 握手时主动 discover + 连 Editor，再拉 proxy_config / instructions，
-        // 避免「initialize 只有短 prefix、Upstream 规则晚到」导致 AI 第一轮不调 MCP。
-        let upstream = "";
-        try {
-            await this.unrealManager.maintainConnection();
-            if (this.unrealManager.isWsOpen()) {
-                await this.unrealManager.fetchProxyConfig();
-                upstream = await this.unrealManager.fetchUpstreamInstructions();
-            }
-        } catch { /* UE 未运行时仍返回 prefix */ }
+        // 握手时主动 discover + 连 Editor，再拉 proxy_config / instructions。
+        // 先取上次缓存，UE 临时不可达时仍回最近一次 instructions。
+        // 加 INITIALIZE_WARMUP_MS 上限：超时先返回 prefix，后台继续预热，避免全端口扫描阻塞握手。
+        let upstream = this.unrealManager.getUpstreamInstructions();
+        // warmup 内部自包 try/catch：超时先返回时它仍在后台继续，
+        // 绝不能让其 reject 冒泡为 unhandledRejection（Promise.race 已 settle 后无人接住）。
+        const warmup = (async () => {
+            try {
+                await this.unrealManager.maintainConnection();
+                if (this.unrealManager.isWsOpen()) {
+                    await this.unrealManager.fetchProxyConfig();
+                    upstream = await this.unrealManager.fetchUpstreamInstructions();
+                }
+            } catch { /* UE 未运行时仍返回 prefix */ }
+        })();
+        const timeout = new Promise<void>(resolve =>
+            setTimeout(resolve, NexusMcpDispatcher.INITIALIZE_WARMUP_MS)
+        );
+        // 超时则先返回 prefix，warmup 后台继续执行（不 cancel，为下次 tools/call 预热缓存）
+        await Promise.race([warmup, timeout]);
 
         const instructionsPrefix = this.unrealManager.getProxyConfig().initializePrefix;
         const connectedNote = this.unrealManager.isWsOpen()
@@ -129,7 +150,7 @@ export class NexusMcpDispatcher {
             },
             serverInfo: {
                 name: SERVER_NAME,
-                version: SERVER_VERSION,
+                version: this.serverVersion,
             },
             instructions,
         };

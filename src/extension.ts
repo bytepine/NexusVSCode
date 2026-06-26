@@ -6,6 +6,7 @@ import { NexusMcpHttpServer, findAvailablePort } from "./mcp/NexusMcpServer";
 import { StatusBarWidget } from "./ui/StatusBarWidget";
 import { showInstancePicker, copyMcpConfig } from "./ui/InstancePicker";
 import { getConfig, onConfigChanged } from "./config/NexusLinkSettings";
+import { logger } from "./util/logger";
 
 let manager: UnrealInstanceManager | null = null;
 let httpServer: NexusMcpHttpServer | null = null;
@@ -15,6 +16,7 @@ let scanTimer: ReturnType<typeof setInterval> | null = null;
 let commandsRegistered = false;
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
+    logger.init(context);
     const config = getConfig();
     if (config.enabled) {
         await startAll(context, config);
@@ -52,20 +54,32 @@ async function startAll(
     manager.scanPortStart = config.scanPortStart;
     manager.scanPortEnd = config.scanPortEnd;
 
-    // 启动 HTTP MCP 服务器
-    httpServer = new NexusMcpHttpServer(manager);
+    // 检测 MCP 端口与 UE 扫描区间重叠，误配时 AI 会把代理自身当 UE 实例扫到
+    const scanMin = Math.min(config.scanPortStart, config.scanPortEnd);
+    const scanMax = Math.max(config.scanPortStart, config.scanPortEnd);
+    if (config.httpPort >= scanMin && config.httpPort <= scanMax) {
+        const warnMsg = `MCP 端口 ${config.httpPort} 与 UE 扫描区间 [${scanMin}, ${scanMax}] 重叠，可能导致代理端口被误当 UE 实例探测，请调整配置`;
+        logger.warn(warnMsg);
+        vscode.window.showWarningMessage(`Nexus MCP: ${warnMsg}`);
+    }
+
+    // 启动 HTTP MCP 服务器（注入运行时版本号，由 packageJSON 读取）
+    const pluginVersion = (context.extension.packageJSON as Record<string, unknown>).version as string ?? "0.0.0";
+    httpServer = new NexusMcpHttpServer(manager, pluginVersion);
     const port = await findAvailablePort(config.httpPort);
     if (port < 0) {
-        vscode.window.showErrorMessage(
-            `Nexus MCP: 端口 ${config.httpPort} 及后续 100 个端口均被占用，服务器未启动`,
-        );
+        const msg = `端口 ${config.httpPort} 及后续 100 个端口均被占用，服务器未启动`;
+        logger.error(msg);
+        vscode.window.showErrorMessage(`Nexus MCP: ${msg}`);
         await stopAll();
         return;
     }
 
     const started = await httpServer.start(port);
     if (!started) {
-        vscode.window.showErrorMessage(`Nexus MCP: 服务器启动失败（端口 ${port}）`);
+        const msg = `服务器启动失败（端口 ${port}）`;
+        logger.error(msg);
+        vscode.window.showErrorMessage(`Nexus MCP: ${msg}`);
         await stopAll();
         return;
     }
@@ -73,8 +87,10 @@ async function startAll(
     const portNote = port !== config.httpPort
         ? `（端口 ${config.httpPort} 被占用，实际端口：${port}）`
         : "";
-    vscode.window.showInformationMessage(
+    logger.info(`MCP 服务器已就绪：http://127.0.0.1:${port}/stream ${portNote}`);
+    vscode.window.setStatusBarMessage(
         `Nexus MCP 已就绪：http://127.0.0.1:${port}/stream ${portNote}`,
+        5000,
     );
 
     // 状态栏（首次激活时创建；热开启时复用若已存在则刷新）
@@ -84,14 +100,18 @@ async function startAll(
     } else {
         statusBar.attach(manager);
     }
+    statusBar.setServerPort(port);
 
     // UE 连接变化 → 刷新状态栏 + 通知 MCP 客户端
     manager.on("connectionChanged", async (connectedPort: number) => {
         if (connectedPort > 0) {
+            logger.info(`已连接 UE 实例（端口 ${connectedPort}）`);
             // 先预热代理侧缓存，再推送 list_changed，避免客户端收到通知后 tools/list 仍为空。
             await manager!.fetchToolsList();
             // 仅重连成功时广播 list_changed，让 Cursor/Codebuddy 刷新工具清单。
             httpServer?.sendToolsChangedNotification();
+        } else {
+            logger.info("UE 实例已断开");
         }
         statusBar?.refresh();
     });
@@ -143,6 +163,7 @@ async function stopAll(): Promise<void> {
     await httpServer?.stop();
     httpServer = null;
     // 状态栏保留不 dispose（命令和 UI 生命周期随扩展），但需解除对已释放 manager 的引用
+    statusBar?.setServerPort(0);
     statusBar?.detach();
     statusBar?.refresh();
 }

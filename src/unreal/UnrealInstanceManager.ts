@@ -5,6 +5,7 @@ import WebSocket from "ws";
 import { EventEmitter } from "events";
 import type { UnrealInstanceInfo } from "./types";
 import { DEFAULT_PROXY_CONFIG, parseProxyConfig, type ProxyConfig } from "./proxyConfig";
+import { logger } from "../util/logger";
 
 /** WebSocket JSON-RPC 请求结果（区分断连 vs 超时，避免误报「未连接」）。 */
 export type WsRequestResult =
@@ -62,6 +63,9 @@ export class UnrealInstanceManager extends EventEmitter {
 
     /** tools/call 默认超时：资产搜索等 GameThread 任务常超过 5s。 */
     static readonly TOOLS_CALL_TIMEOUT_MS = 120_000;
+
+    /** 并发端口扫描的批大小上限（对齐 Rider 固定线程池 20 上限，避免大范围扫描耗尽 fd）。 */
+    private static readonly SCAN_CONCURRENCY = 20;
 
     /** tools/list、nexus/instructions 等与慢工具共用长超时（旧值 3s 易与 search_asset 并发时误伤长连接）。 */
     static readonly WS_LIGHT_REQUEST_TIMEOUT_MS = UnrealInstanceManager.TOOLS_CALL_TIMEOUT_MS;
@@ -142,15 +146,15 @@ export class UnrealInstanceManager extends EventEmitter {
             this.resetWsConnection(false);
         }
 
-        // 未连接时自动选择：优先用户 preferredPort，其次 Editor 实例，最后仅有一个实例时直接连
+        // 未连接时自动选择：优先用户 preferredPort，其次 Editor 实例（大小写不敏感），最后第一个
         if (this.connectedPort < 0 && found.length > 0) {
             let target: UnrealInstanceInfo | null = null;
             if (this.preferredPort > 0) {
                 target = found.find(i => i.port === this.preferredPort) ?? null;
             }
             if (!target) {
-                const editor = found.find(i => i.netRole === "Editor");
-                target = editor ?? (found.length === 1 ? found[0] : null);
+                const editor = found.find(i => i.netRole?.toLowerCase() === "editor");
+                target = editor ?? found[0];
             }
             if (target) await this.connectTo(target.port);
         }
@@ -158,17 +162,26 @@ export class UnrealInstanceManager extends EventEmitter {
         return found;
     }
 
-    /** 并发扫描端口范围。 */
+    /** probeStatus 响应体读取上限，防异常端口返回超大 body 占内存。 */
+    private static readonly PROBE_MAX_BYTES = 65_536;
+
+    /** 并发扫描端口范围（分片，每批 SCAN_CONCURRENCY 个，与 Rider 线程池上限对齐）。 */
     private async scanPortsParallel(): Promise<UnrealInstanceInfo[]> {
         // 防御：用户将 start/end 配置颠倒时自动交换，避免 for 循环直接不执行导致永无结果
         const start = Math.min(this.scanPortStart, this.scanPortEnd);
         const end = Math.max(this.scanPortStart, this.scanPortEnd);
-        const promises: Promise<UnrealInstanceInfo | null>[] = [];
-        for (let port = start; port <= end; port++) {
-            promises.push(this.probeStatus(port));
+        const found: UnrealInstanceInfo[] = [];
+        for (let port = start; port <= end; port += UnrealInstanceManager.SCAN_CONCURRENCY) {
+            const batch: Promise<UnrealInstanceInfo | null>[] = [];
+            for (let p = port; p < port + UnrealInstanceManager.SCAN_CONCURRENCY && p <= end; p++) {
+                batch.push(this.probeStatus(p));
+            }
+            const results = await Promise.all(batch);
+            for (const r of results) {
+                if (r !== null) found.push(r);
+            }
         }
-        const results = await Promise.all(promises);
-        return results.filter((r): r is UnrealInstanceInfo => r !== null);
+        return found;
     }
 
     /** 通过 GET /status 探测 UE 实例。 */
@@ -184,8 +197,17 @@ export class UnrealInstanceManager extends EventEmitter {
                         return;
                     }
                     let body = "";
+                    let bodyBytes = 0;
                     res.setEncoding("utf8");
-                    res.on("data", chunk => { body += chunk; });
+                    res.on("data", (chunk: string) => {
+                        bodyBytes += Buffer.byteLength(chunk, "utf8");
+                        if (bodyBytes > UnrealInstanceManager.PROBE_MAX_BYTES) {
+                            req.destroy();
+                            resolve(null);
+                            return;
+                        }
+                        body += chunk;
+                    });
                     res.on("end", () => {
                         try {
                             const json = JSON.parse(body);
@@ -265,7 +287,9 @@ export class UnrealInstanceManager extends EventEmitter {
                 this.ws = null;
                 this.releasePendingRequests();
                 this.emit("connectionChanged", -1);
-                this.discoverInstances().catch(() => { /* ignore */ });
+                this.discoverInstances().catch(err => {
+                    logger.warn(`断线后重扫描失败: ${err instanceof Error ? err.message : String(err)}`);
+                });
             });
 
             socket.on("error", () => {
@@ -413,13 +437,16 @@ export class UnrealInstanceManager extends EventEmitter {
     /**
      * 通过一次性 WebSocket 连接向指定端口转发 tools/call，不改动长连接。
      * 用于 AI 指定 targetPort 跨实例并发查询（DS / Client1 / Client2 同时查）。
+     * 优先用最近一次扫描的 instances 缓存解析 wsPort，省冗余 HTTP 探测。
      */
     async forwardToolCallToPort(
         port: number,
         params: Record<string, unknown>,
         timeoutMs = UnrealInstanceManager.TOOLS_CALL_TIMEOUT_MS,
     ): Promise<WsRequestResult> {
-        const info = await this.probeStatus(port);
+        // 优先从最近扫描缓存取 wsPort，省一次 HTTP 探测
+        const cached = this.instances.find(i => i.port === port);
+        const info = cached ?? await this.probeStatus(port);
         if (!info) return { status: "disconnected" };
 
         return new Promise(resolve => {
@@ -495,7 +522,8 @@ export class UnrealInstanceManager extends EventEmitter {
             this.pendingRequests.set(id, { resolve, timer });
             try {
                 this.ws!.send(JSON.stringify(request));
-            } catch {
+            } catch (e) {
+                logger.warn(`WS 请求发送失败（method: ${method}）: ${e instanceof Error ? e.message : String(e)}`);
                 clearTimeout(timer);
                 this.pendingRequests.delete(id);
                 this.scheduleWsKeepalive();

@@ -22,13 +22,23 @@ export class NexusMcpHttpServer {
     /** HTTP 通道的 per-session Dispatcher 表。 */
     private httpSessions = new Map<string, NexusMcpDispatcher>();
 
+    /** 活跃会话上限：超出时按插入序淘汰最旧的非当前会话（防客户端循环重连导致内存增长）。 */
+    private static readonly MAX_SESSIONS = 50;
+
     /** 活跃的 SSE 客户端连接，用于推送 MCP 服务端通知。 */
     private sseResponses: http.ServerResponse[] = [];
 
+    /** SSE 长连接保活心跳间隔（经反代/NAT idle 30–60s 常被断开）。 */
+    private static readonly SSE_KEEPALIVE_MS = 20_000;
+
     port = 0;
 
-    constructor(manager: UnrealInstanceManager) {
+    /** 插件版本号，由 extension.ts 从 packageJSON 读取后注入，透传给每个 Dispatcher。 */
+    private readonly serverVersion: string;
+
+    constructor(manager: UnrealInstanceManager, serverVersion = "0.0.0") {
         this.manager = manager;
+        this.serverVersion = serverVersion;
     }
 
     async start(port: number): Promise<boolean> {
@@ -38,7 +48,7 @@ export class NexusMcpHttpServer {
             const path = (req.url ?? "/").split("?")[0];
             const method = req.method ?? "";
 
-            if (method === "OPTIONS" && (path === "/stream" || path === "/sse" || path === "/status")) {
+            if (method === "OPTIONS" && (path === "/stream" || path === "/sse")) {
                 addCorsHeaders(res);
                 res.writeHead(204);
                 res.end();
@@ -61,6 +71,7 @@ export class NexusMcpHttpServer {
                 return;
             }
 
+            addCorsHeaders(res);
             res.writeHead(404, { "Content-Type": "application/json" });
             res.end(JSON.stringify({ error: "Not Found" }));
         });
@@ -89,15 +100,36 @@ export class NexusMcpHttpServer {
         }
 
         const incomingSessionId = (req.headers[MCP_SESSION_HEADER] as string) ?? "";
-        const bIsInitialize = body.includes('"initialize"');
+        // 先尝试 JSON 解析取 method，避免工具参数含 "initialize" 子串时误判
+        let bIsInitialize: boolean;
+        try {
+            bIsInitialize = (JSON.parse(body) as Record<string, unknown>).method === "initialize";
+        } catch {
+            bIsInitialize = body.includes('"initialize"');
+        }
 
         let sessionId: string;
         let dispatcher: NexusMcpDispatcher;
 
         if (bIsInitialize) {
             sessionId = crypto.randomUUID();
-            dispatcher = new NexusMcpDispatcher(this.manager, () => this.sendToolsChangedNotification());
+            dispatcher = new NexusMcpDispatcher(this.manager, () => this.sendToolsChangedNotification(), this.serverVersion);
             this.httpSessions.set(sessionId, dispatcher);
+            // 清理其余仍处于 WaitingForInitialize 的陈旧会话
+            for (const [k, d] of this.httpSessions) {
+                if (k !== sessionId && d.isWaitingForInitialize) {
+                    this.httpSessions.delete(k);
+                }
+            }
+            // 超上限时按插入序淘汰最旧的非当前会话（防循环重连导致内存增长）
+            if (this.httpSessions.size > NexusMcpHttpServer.MAX_SESSIONS) {
+                for (const k of this.httpSessions.keys()) {
+                    if (k !== sessionId) {
+                        this.httpSessions.delete(k);
+                        break;
+                    }
+                }
+            }
         } else if (incomingSessionId && this.httpSessions.has(incomingSessionId)) {
             sessionId = incomingSessionId;
             dispatcher = this.httpSessions.get(sessionId)!;
@@ -129,6 +161,7 @@ export class NexusMcpHttpServer {
     /**
      * GET /sse — SSE 长连接。
      * 静默保持连接，仅用于服务端推送通知（如 notifications/tools/list_changed）。
+     * 每 SSE_KEEPALIVE_MS 写一行注释帧避免经反代/NAT idle 被断开。
      */
     private handleSse(res: http.ServerResponse): void {
         addCorsHeaders(res);
@@ -140,7 +173,24 @@ export class NexusMcpHttpServer {
         res.flushHeaders();
 
         this.sseResponses.push(res);
+
+        // 周期心跳帧：write 失败即视为死连接并清理
+        const timer = setInterval(() => {
+            if (res.destroyed || res.writableEnded) {
+                clearInterval(timer);
+                this.sseResponses = this.sseResponses.filter(r => r !== res);
+                return;
+            }
+            res.write(": keepalive\n\n", err => {
+                if (err) {
+                    clearInterval(timer);
+                    this.sseResponses = this.sseResponses.filter(r => r !== res);
+                }
+            });
+        }, NexusMcpHttpServer.SSE_KEEPALIVE_MS);
+
         res.on("close", () => {
+            clearInterval(timer);
             this.sseResponses = this.sseResponses.filter(r => r !== res);
         });
     }
