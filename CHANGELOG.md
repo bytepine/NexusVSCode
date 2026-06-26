@@ -7,6 +7,9 @@
 
 ## [Unreleased]
 
+- docs(store): 新增商店专用 `README.marketplace.md`（中英双语、中文在前），VS Code Marketplace / Open VSX 详情页内容与仓库 README 解耦（参考 NexusRider 插件页风格）
+- chore(script): `build_vscode.py` 打包时临时以 `README.marketplace.md` 覆盖 `README.md`、打包后还原；`read_file`/`write_file` 改为保留原始行尾（`newline=""`），避免本地构建弄脏 git 工作区
+
 ## [1.3.9] - 2026-06-26
 
 - chore(script): `build_vscode.py` 打包时裁剪 CHANGELOG.md 为最近 5 个已发布版本（与 nexus-rider 插件页 change-notes 规则一致），打包后还原完整历史

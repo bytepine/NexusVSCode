@@ -37,12 +37,15 @@ def repo_root() -> str:
 
 
 def read_file(path: str) -> str:
-    with open(path, encoding="utf-8") as f:
+    # newline="" 关闭换行转换，保留文件原始行尾（仓库内 LF / CRLF 混用）
+    with open(path, encoding="utf-8", newline="") as f:
         return f.read()
 
 
 def write_file(path: str, content: str) -> None:
-    with open(path, "w", encoding="utf-8") as f:
+    # newline="" 写回时不做转换，使临时改写→还原 package.json / CHANGELOG.md /
+    # README.md 时与原文件字节一致，避免在 Windows 上弄脏 git 工作区。
+    with open(path, "w", encoding="utf-8", newline="") as f:
         f.write(content)
 
 
@@ -98,15 +101,31 @@ def patch_changelog(changelog_path: str) -> str | None:
     return original
 
 
+def patch_readme(readme_path: str, marketplace_path: str) -> str | None:
+    """打包时用商店专用 README 覆盖根目录 README.md，使商店 Details 页与仓库 README 解耦。
+
+    若 README.marketplace.md 不存在则不处理（商店页回退为仓库 README）。
+    返回原始 README.md 内容供 finally 还原；原 README.md 不存在时返回空串占位。
+    """
+    if not os.path.isfile(marketplace_path):
+        return None
+    original = read_file(readme_path) if os.path.isfile(readme_path) else ""
+    write_file(readme_path, read_file(marketplace_path))
+    return original
+
+
 def build_vscode_extension(version: str, output_dir: str) -> str:
     root = repo_root()
     pkg_path = os.path.join(root, "package.json")
     changelog_path = os.path.join(root, "CHANGELOG.md")
+    readme_path = os.path.join(root, "README.md")
+    readme_marketplace_path = os.path.join(root, "README.marketplace.md")
     npm_cmd = "npm.cmd" if sys.platform == "win32" else "npm"
     npx_cmd = "npx.cmd" if sys.platform == "win32" else "npx"
 
     original_pkg = patch_package_json(pkg_path, version)
     original_changelog = patch_changelog(changelog_path)
+    original_readme = patch_readme(readme_path, readme_marketplace_path)
 
     try:
         print("[build] npm ci ...")
@@ -135,6 +154,8 @@ def build_vscode_extension(version: str, output_dir: str) -> str:
         write_file(pkg_path, original_pkg)
         if original_changelog is not None:
             write_file(changelog_path, original_changelog)
+        if original_readme is not None:
+            write_file(readme_path, original_readme)
 
 
 def main() -> int:
