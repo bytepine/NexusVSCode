@@ -7,7 +7,10 @@
 
 ## [Unreleased]
 
+## [1.3.9] - 2026-06-26
+
 - chore(script): `build_vscode.py` 打包时裁剪 CHANGELOG.md 为最近 5 个已发布版本（与 nexus-rider 插件页 change-notes 规则一致），打包后还原完整历史
+- docs: README 移除插件版本号（避免随发版漂移）；补充扩展商店搜索安装方式（Open VSX）；本地构建示例版本号改占位
 
 ## [1.3.8] - 2026-06-26
 

@@ -2,8 +2,6 @@
 
 # nexus-vscode — VSCode / Cursor MCP Proxy Extension
 
-**Current version: 1.3.7** · Extension ID: `byteyang.nexus-mcp-vscode`
-
 VSCode / Cursor MCP **proxy** extension: runs a standalone MCP HTTP server locally (default `:6900`), auto-discovers UE instances, and forwards AI tool calls to the **NexusLink** UE plugin over WebSocket. Blueprints, assets, PIE, and other capabilities are provided by NexusLink on the UE side; this extension does not implement game logic.
 
 ---
@@ -24,7 +22,7 @@ Why use a proxy: AI clients connect to a fixed port; the extension scans `45000`
 
 | Component | Requirement |
 |-----------|-------------|
-| **nexus-vscode** | ≥ 1.3.3 (aligned with UE `proxy_config.minProxyVersion`) |
+| **nexus-vscode** | Aligned with UE `proxy_config.minProxyVersion`; use the latest version |
 | **NexusLink** (UE plugin) | `nexus-mcp-unreal-*.zip` from [NexusLink Releases](https://github.com/bytepine/NexusLink/releases); UE **4.26+** |
 | **VSCode / Cursor** | VS Code Engine **^1.85.0** |
 | **Node.js** (local build only) | 20+ |
@@ -35,9 +33,10 @@ NexusLink install: extract the zip into your UE project’s `Plugins/Developer/N
 
 ## Getting Releases
 
-| Artifact | Source |
-|----------|--------|
-| `nexus-mcp-vscode-<version>.vsix` | [NexusVSCode Releases](https://github.com/bytepine/NexusVSCode/releases) |
+| Channel | Notes |
+|---------|-------|
+| **Extension marketplace** (recommended) | Search **Nexus MCP** in the Extensions panel of VSCode / Cursor / CodeBuddy / Windsurf (served via [Open VSX](https://open-vsx.org/extension/byteyang/nexus-mcp-vscode)) |
+| `nexus-mcp-vscode-<version>.vsix` | Download from [NexusVSCode Releases](https://github.com/bytepine/NexusVSCode/releases) and install manually |
 | `nexus-mcp-unreal-<version>.zip` (NexusLink UE plugin) | [NexusLink Releases](https://github.com/bytepine/NexusLink/releases) |
 
 You can also [build locally](#local-build-and-development) to produce a `.vsix` and install via **Extensions: Install from VSIX...**.
@@ -139,10 +138,15 @@ If unchecked, the extension finds no instances and the status bar shows disconne
 
 ### 2. Install Extension
 
+**Option A — Extension marketplace (recommended)**: search **Nexus MCP** in the Extensions panel of VSCode / Cursor / CodeBuddy / Windsurf and install.
+
+**Option B — Manual vsix**:
+
 1. Download `nexus-mcp-vscode-<version>.vsix` from [NexusVSCode Releases](https://github.com/bytepine/NexusVSCode/releases), or [build locally](#local-build-and-development)
 2. VSCode / Cursor → **Extensions: Install from VSIX...** → select the `.vsix`
 3. Reload the window
-4. **Settings** → search `nexusMcp` → set **Nexus Mcp: Enabled** to `true` (off by default; starts immediately on enable, default port `6900`)
+
+After install: **Settings** → search `nexusMcp` → set **Nexus Mcp: Enabled** to `true` (off by default; starts immediately on enable, default port `6900`).
 
 ### 3. Configuration
 
@@ -306,7 +310,7 @@ Enable `nexusMcp.enabled` first (see [Install extension](#2-install-extension));
 ### Package the Extension
 
 ```bash
-py scripts/build_vscode.py --version 1.3.7 --output release/
+py scripts/build_vscode.py --version <version> --output release/
 ```
 
 Or manually:
