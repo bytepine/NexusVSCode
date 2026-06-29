@@ -7,6 +7,10 @@
 
 ## [Unreleased]
 
+### Chore
+
+- chore(release): 支持 Pre-release 发版流程——版本号 `X.Y.Z-beta.N` 触发 GitHub pre-release；Pre-release 跳过 Open VSX / VS Marketplace 上架
+
 ## [1.4.1] - 2026-06-26
 
 - docs: `README.marketplace.md` 双语顺序改为英文在前、中文在后，满足商店校验要求

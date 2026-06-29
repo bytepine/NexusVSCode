@@ -34,6 +34,11 @@ jobs:
             exit 1
           fi
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          if echo "$VERSION" | grep -qE '\-beta(\.|$)'; then
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -69,10 +74,11 @@ jobs:
           files: release/nexus-mcp-vscode-${{ steps.meta.outputs.version }}.vsix
           generate_release_notes: false
           overwrite: true
+          prerelease: ${{ steps.meta.outputs.prerelease == 'true' }}
 
-      # 覆盖 Cursor / CodeBuddy / Windsurf / VSCodium 等（默认走 Open VSX）
+      # Pre-release 仅 GitHub pre-release；不上架 Open VSX / VS Marketplace
       - name: Publish to Open VSX
-        if: ${{ env.OVSX_TOKEN != '' }}
+        if: ${{ env.OVSX_TOKEN != '' && steps.meta.outputs.prerelease != 'true' }}
         run: >-
           npx -y ovsx publish
           release/nexus-mcp-vscode-${{ steps.meta.outputs.version }}.vsix
@@ -80,7 +86,7 @@ jobs:
 
       # 覆盖微软官方 VS Code
       - name: Publish to VS Code Marketplace
-        if: ${{ env.VSCE_PAT != '' }}
+        if: ${{ env.VSCE_PAT != '' && steps.meta.outputs.prerelease != 'true' }}
         run: >-
           npx -y @vscode/vsce publish
           --packagePath release/nexus-mcp-vscode-${{ steps.meta.outputs.version }}.vsix
