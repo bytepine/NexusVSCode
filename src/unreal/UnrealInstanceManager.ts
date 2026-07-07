@@ -41,6 +41,11 @@ export class UnrealInstanceManager extends EventEmitter {
      */
     preferredPort = -1;
 
+    /**
+     * 用户主动断开标志：为 true 时抑制自动重连，直到用户主动连接某实例后清除。
+     */
+    private manuallyDisconnected = false;
+
     private ws: WebSocket | null = null;
 
     /** 连接代次：避免旧 socket 的 onClose 误清新连接。 */
@@ -146,8 +151,9 @@ export class UnrealInstanceManager extends EventEmitter {
             this.resetWsConnection(false);
         }
 
-        // 未连接时自动选择：优先用户 preferredPort，其次 Editor 实例（大小写不敏感），最后第一个
-        if (this.connectedPort < 0 && found.length > 0) {
+        // 未连接时自动选择：优先用户 preferredPort，其次 Editor 实例，最后第一个
+        // 用户手动断开后不自动重连，直到用户主动选择实例
+        if (this.connectedPort < 0 && found.length > 0 && !this.manuallyDisconnected) {
             let target: UnrealInstanceInfo | null = null;
             if (this.preferredPort > 0) {
                 target = found.find(i => i.port === this.preferredPort) ?? null;
@@ -243,7 +249,10 @@ export class UnrealInstanceManager extends EventEmitter {
      *                     自动发现时置 false，不覆盖用户偏好。
      */
     async connectTo(port: number, setPreferred = false): Promise<boolean> {
-        if (setPreferred) this.preferredPort = port;
+        if (setPreferred) {
+            this.preferredPort = port;
+            this.manuallyDisconnected = false; // 用户主动选择，恢复自动重连
+        }
         // 已连到同端口且 WS 存活：直接复用，避免 reset→重建造成连接抖动
         if (this.connectedPort === port && this.isWsOpen()) return true;
         const info = await this.probeStatus(port);
@@ -305,6 +314,7 @@ export class UnrealInstanceManager extends EventEmitter {
     }
 
     disconnect(): void {
+        this.manuallyDisconnected = true;
         this.resetWsConnection(true);
     }
 
@@ -343,6 +353,7 @@ export class UnrealInstanceManager extends EventEmitter {
      */
     async ensureLongConnection(): Promise<boolean> {
         if (this.isWsOpen()) return true;
+        if (this.manuallyDisconnected) return false;
 
         const reconnectPort = this.connectedPort > 0
             ? this.connectedPort
