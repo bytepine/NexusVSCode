@@ -7,6 +7,8 @@
 
 ## [Unreleased]
 
+## [1.4.2] - 2026-07-07
+
 ### Fixed
 - 手动断开 UE 连接后不再自动重连，直到用户主动选择实例或重启扩展
 
@@ -14,7 +16,6 @@
 - README 接入方式对比表新增 NexusDesktop 独立托盘程序入口
 
 ### Chore
-
 - chore(release): 支持 Pre-release 发版流程——版本号 `X.Y.Z-beta.N` 触发 GitHub pre-release；Pre-release 跳过 Open VSX / VS Marketplace 上架
 
 ## [1.4.1] - 2026-06-26
