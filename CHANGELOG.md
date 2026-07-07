@@ -7,6 +7,9 @@
 
 ## [Unreleased]
 
+### Docs
+- README 接入方式对比表新增 NexusDesktop 独立托盘程序入口
+
 ### Chore
 
 - chore(release): 支持 Pre-release 发版流程——版本号 `X.Y.Z-beta.N` 触发 GitHub pre-release；Pre-release 跳过 Open VSX / VS Marketplace 上架

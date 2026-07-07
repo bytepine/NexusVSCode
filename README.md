@@ -12,6 +12,7 @@ VSCode / Cursor 端 MCP **代理**扩展：在本地运行独立 MCP HTTP 服务
 |----------|------|------|
 | **VSCode 代理**（本扩展） | `http://127.0.0.1:6900/stream` | VSCode / Cursor / CodeBuddy 用户；自动发现/切换多 UE 实例 |
 | Rider 代理 | `http://127.0.0.1:6800/stream` | JetBrains Rider 用户（见 [NexusRider](https://github.com/bytepine/NexusRider)） |
+| NexusDesktop 独立程序 | `http://127.0.0.1:6700/stream` | **无需 IDE 插件**；双击 .exe/.app 常驻托盘即可（见 [NexusDesktop](https://github.com/bytepine/NexusDesktop)） |
 | 直连 UE | `http://127.0.0.1:45000/stream` | 无需 IDE 插件；须自行指定 UE 端口 |
 
 代理模式的价值：AI 客户端只连固定端口，由扩展负责扫描 `45000`–`45100`、维持 WebSocket 长连接、在多 Editor / PIE 实例间切换。
