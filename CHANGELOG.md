@@ -7,6 +7,9 @@
 
 ## [Unreleased]
 
+### Fixed
+- 手动断开 UE 连接后不再自动重连，直到用户主动选择实例或重启扩展
+
 ### Docs
 - README 接入方式对比表新增 NexusDesktop 独立托盘程序入口
 
