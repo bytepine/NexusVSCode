@@ -15,6 +15,13 @@ class NexusLogger implements vscode.Disposable {
         context.subscriptions.push(this);
     }
 
+    /** 仅当 `nexusMcp.logLevel` 设为 debug 时写入 Output；默认静默，避免刷屏。 */
+    debug(msg: string): void {
+        const level = vscode.workspace.getConfiguration("nexusMcp").get<string>("logLevel", "info");
+        if (level !== "debug") return;
+        this.channel?.appendLine(`[DEBUG] ${timestamp()} ${msg}`);
+    }
+
     info(msg: string): void {
         this.channel?.appendLine(`[INFO]  ${timestamp()} ${msg}`);
     }

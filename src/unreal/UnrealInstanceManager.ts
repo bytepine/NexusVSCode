@@ -6,6 +6,7 @@ import { EventEmitter } from "events";
 import type { UnrealInstanceInfo } from "./types";
 import { DEFAULT_PROXY_CONFIG, parseProxyConfig, type ProxyConfig } from "./proxyConfig";
 import { logger } from "../util/logger";
+import { ProxyFeedbackBuffer, isMethodNotFoundError, type ProxyFeedbackEvent } from "./ProxyFeedbackBuffer";
 
 /** WebSocket JSON-RPC 请求结果（区分断连 vs 超时，避免误报「未连接」）。 */
 export type WsRequestResult =
@@ -65,6 +66,12 @@ export class UnrealInstanceManager extends EventEmitter {
 
     /** JSON-RPC 请求 ID 自增计数器。 */
     private idCounter = 1;
+
+    /** 代理层转发失败（断连/超时/连接失败）的进程内缓冲，供 nexus/proxy_feedback 上报给 UE。 */
+    readonly proxyFeedbackBuffer = new ProxyFeedbackBuffer();
+
+    /** flushProxyFeedback 并发保护：避免同一批事件被重复发送。 */
+    private proxyFeedbackFlushing = false;
 
     /** tools/call 默认超时：资产搜索等 GameThread 任务常超过 5s。 */
     static readonly TOOLS_CALL_TIMEOUT_MS = 120_000;
@@ -406,6 +413,55 @@ export class UnrealInstanceManager extends EventEmitter {
     /** 通过 WebSocket 转发 tools/call。 */
     async forwardToolCall(params: Record<string, unknown>): Promise<WsRequestResult> {
         return this.sendWsRequest("tools/call", params, UnrealInstanceManager.TOOLS_CALL_TIMEOUT_MS);
+    }
+
+    /**
+     * 尝试上报缓冲中的代理层失败事件（fire-and-forget，不阻塞、不影响对 AI 的原始错误）。
+     * 旧版 NexusLink 未实现 `nexus/proxy_feedback` 时静默降级：标记 unsupported 后不再重试。
+     * flush 自身失败（仍未连接/超时）时把事件放回队首，等待下次连上再试，不上抛任何异常。
+     */
+    async flushProxyFeedback(): Promise<void> {
+        if (this.proxyFeedbackFlushing) return;
+        if (this.proxyFeedbackBuffer.isUnsupported) return;
+        if (!this.proxyFeedbackBuffer.hasPending()) return;
+
+        this.proxyFeedbackFlushing = true;
+        try {
+            const events = this.proxyFeedbackBuffer.drain();
+            for (const event of events) {
+                if (this.proxyFeedbackBuffer.isUnsupported) return;
+                try {
+                    const outcome = await this.sendProxyFeedbackEvent(event);
+                    if (outcome.status !== "ok") {
+                        // 反馈通道自身断连/超时：放回队首，下次连上再试，不级联报错。
+                        this.proxyFeedbackBuffer.requeue(event);
+                        return;
+                    }
+                    if (isMethodNotFoundError(outcome.response)) {
+                        this.proxyFeedbackBuffer.markUnsupported();
+                        logger.debug("UE 不支持 nexus/proxy_feedback（旧版 NexusLink），已跳过后续上报");
+                        return;
+                    }
+                } catch {
+                    // 任何异常均静默吞掉，绝不影响主路径。
+                    this.proxyFeedbackBuffer.requeue(event);
+                    return;
+                }
+            }
+        } finally {
+            this.proxyFeedbackFlushing = false;
+        }
+    }
+
+    /** 发送单条 nexus/proxy_feedback 请求，短超时避免拖慢正常连接流程。 */
+    private async sendProxyFeedbackEvent(event: ProxyFeedbackEvent): Promise<WsRequestResult> {
+        return this.sendWsRequest("nexus/proxy_feedback", {
+            category: event.category,
+            tool: event.tool,
+            errorText: event.errorText,
+            note: event.note,
+            proxy: "vscode",
+        }, 3000);
     }
 
     /**

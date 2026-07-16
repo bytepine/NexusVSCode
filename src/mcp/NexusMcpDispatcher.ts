@@ -226,15 +226,26 @@ export class NexusMcpDispatcher {
             }
         }
         if (outcome.status === "disconnected") {
-            return makeError(id, INTERNAL_ERROR, proxyConfig.errorMessages.notConnected);
+            this.unrealManager.proxyFeedbackBuffer.enqueue({
+                category: "proxy_disconnect",
+                tool: toolName,
+                errorText: proxyConfig.errorMessages.notConnected,
+            });
+            void this.unrealManager.flushProxyFeedback();
+            return makeError(id, INTERNAL_ERROR, proxyConfig.errorMessages.notConnected, {
+                errorKind: "proxy_not_connected",
+            });
         }
         if (outcome.status === "timeout") {
             const sec = Math.round(UnrealInstanceManager.TOOLS_CALL_TIMEOUT_MS / 1000);
-            return makeError(
-                id,
-                INTERNAL_ERROR,
-                `UE request timed out after ${sec}s. ${proxyConfig.errorMessages.timeoutHint}`,
-            );
+            const message = `UE request timed out after ${sec}s. ${proxyConfig.errorMessages.timeoutHint}`;
+            this.unrealManager.proxyFeedbackBuffer.enqueue({
+                category: "proxy_timeout",
+                tool: toolName,
+                errorText: message,
+            });
+            void this.unrealManager.flushProxyFeedback();
+            return makeError(id, INTERNAL_ERROR, message, { errorKind: "proxy_timeout" });
         }
         const response = outcome.response;
         if (response.result !== undefined) {
@@ -282,6 +293,13 @@ export class NexusMcpDispatcher {
             // extension.ts 的 connectionChanged 监听不覆盖此路径（手动连接 bypass 了 discoverInstances）。
             try { await this.unrealManager.fetchToolsList(); } catch { /* ignore */ }
             this.onSessionReady?.();
+            // 连上后尝试补发断连期间积压的代理层失败事件。
+            void this.unrealManager.flushProxyFeedback();
+        } else {
+            this.unrealManager.proxyFeedbackBuffer.enqueue({
+                category: "proxy_connect_fail",
+                errorText: `连接失败：端口 ${port} 无响应`,
+            });
         }
         const msg = success
             ? `已连接到 UE 实例 (端口 ${port})`
@@ -303,11 +321,13 @@ function makeResult(id: unknown, result: unknown): string {
     });
 }
 
-function makeError(id: unknown, code: number, message: string): string {
+function makeError(id: unknown, code: number, message: string, data?: Record<string, unknown>): string {
+    const error: Record<string, unknown> = { code, message };
+    if (data) error.data = data;
     return JSON.stringify({
         jsonrpc: "2.0",
         id: id ?? null,
-        error: { code, message },
+        error,
     });
 }
 

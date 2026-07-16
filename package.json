@@ -67,6 +67,12 @@
           "minimum": 1,
           "maximum": 3600,
           "description": "UE 实例自动扫描间隔（秒）"
+        },
+        "nexusMcp.logLevel": {
+          "type": "string",
+          "enum": ["info", "debug"],
+          "default": "info",
+          "description": "输出面板日志级别；debug 额外显示排查用细节（如代理层反馈上报降级）"
         }
       }
     },
