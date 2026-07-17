@@ -7,6 +7,8 @@
 
 ## [Unreleased]
 
+## [1.4.3] - 2026-07-17
+
 ### Added
 - feat: 代理转发失败（断连/超时/`connect_unreal_instance` 失败）经新 `nexus/proxy_feedback` 上报给 UE，写入 `.nexus-feedback/`，使中转层错误也能被 AI 反馈系统记录；进程内缓冲 + 连上后自动补发；旧版 NexusLink（未实现该方法）静默降级，不影响正常使用
 - feat: `nexusMcp.logLevel`（`info` 默认 / `debug`）设置项，`logger.debug()` 默认不写 Output，避免降级日志刷屏
