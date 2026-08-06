@@ -7,6 +7,10 @@
 
 ## [Unreleased]
 
+### Changed
+
+- perf(mcp): `handleInitialize` 的连接状态文案改为固定句（以 tools/list 为准），避免随 WS 通断打穿 `cache_control: ephemeral`
+
 ## [1.4.3] - 2026-07-17
 
 ### Added

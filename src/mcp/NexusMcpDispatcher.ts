@@ -135,10 +135,9 @@ export class NexusMcpDispatcher {
         // 超时则先返回 prefix，warmup 后台继续执行（不 cancel，为下次 tools/call 预热缓存）
         await Promise.race([warmup, timeout]);
 
+        // 连接状态文案固定，避免随 WS 通断打穿 Prompt Cache（ephemeral）。
         const instructionsPrefix = this.unrealManager.getProxyConfig().initializePrefix;
-        const connectedNote = this.unrealManager.isWsOpen()
-            ? "(Connected via VSCode extension.)"
-            : "(UE not connected — call list_unreal_instances + connect_unreal_instance when needed.)";
+        const connectedNote = "(Via VSCode extension. Connection: trust tools/list — UE tools present ⇒ connected; else list_unreal_instances + connect_unreal_instance.)";
         const instructions = upstream
             ? `${instructionsPrefix}\n${connectedNote}\n\n--- Upstream (Unreal) ---\n${upstream}`
             : `${instructionsPrefix}\n${connectedNote}`;
