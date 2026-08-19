@@ -7,6 +7,7 @@ import type { UnrealInstanceInfo } from "./types";
 import { DEFAULT_PROXY_CONFIG, parseProxyConfig, type ProxyConfig } from "./proxyConfig";
 import { logger } from "../util/logger";
 import { ProxyFeedbackBuffer, isMethodNotFoundError, type ProxyFeedbackEvent } from "./ProxyFeedbackBuffer";
+import { SessionHub } from "../proxy/SessionHub";
 
 /** WebSocket JSON-RPC 请求结果（区分断连 vs 超时，避免误报「未连接」）。 */
 export type WsRequestResult =
@@ -69,6 +70,9 @@ export class UnrealInstanceManager extends EventEmitter {
 
     /** 代理层转发失败（断连/超时/连接失败）的进程内缓冲，供 nexus/proxy_feedback 上报给 UE。 */
     readonly proxyFeedbackBuffer = new ProxyFeedbackBuffer();
+
+    /** 进程级会话枢纽：TTL 缓存 / Pause / 写门控 / 驾驶舱活动。 */
+    readonly sessionHub = new SessionHub();
 
     /** flushProxyFeedback 并发保护：避免同一批事件被重复发送。 */
     private proxyFeedbackFlushing = false;

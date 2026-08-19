@@ -37,6 +37,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             // 热更新扫描端口范围并重置扫描定时器
             manager.scanPortStart = newConfig.scanPortStart;
             manager.scanPortEnd = newConfig.scanPortEnd;
+            manager.sessionHub.writeGate = newConfig.writeGate;
             startScanTimer(newConfig.scanIntervalSeconds);
         }),
     );
@@ -53,6 +54,21 @@ async function startAll(
     manager = new UnrealInstanceManager();
     manager.scanPortStart = config.scanPortStart;
     manager.scanPortEnd = config.scanPortEnd;
+    manager.sessionHub.writeGate = config.writeGate;
+    manager.sessionHub.setGatePrompter(async info => {
+        const target = info.identity ? ` → ${info.identity}` : "";
+        const pick = await vscode.window.showWarningMessage(
+            `Nexus MCP: Agent 请求 ${info.capability}${target}`,
+            { modal: true },
+            "允许",
+            "拒绝",
+            "本会话总是允许",
+        );
+        if (pick === "允许") return "allow";
+        if (pick === "本会话总是允许") return "always";
+        return "deny";
+    });
+    manager.sessionHub.on("activity", () => statusBar?.refresh());
 
     // 检测 MCP 端口与 UE 扫描区间重叠，误配时 AI 会把代理自身当 UE 实例扫到
     const scanMin = Math.min(config.scanPortStart, config.scanPortEnd);
@@ -143,6 +159,16 @@ async function startAll(
                 if (httpServer?.isRunning) {
                     copyMcpConfig(httpServer.port);
                 }
+            }),
+            vscode.commands.registerCommand("nexus.pauseAgent", () => {
+                manager?.sessionHub.setPaused(true);
+                statusBar?.refresh();
+                vscode.window.setStatusBarMessage("Nexus MCP: 已暂停 Agent 转发", 3000);
+            }),
+            vscode.commands.registerCommand("nexus.resumeAgent", () => {
+                manager?.sessionHub.setPaused(false);
+                statusBar?.refresh();
+                vscode.window.setStatusBarMessage("Nexus MCP: 已恢复 Agent 转发", 3000);
             }),
         );
         commandsRegistered = true;

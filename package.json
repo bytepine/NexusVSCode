@@ -73,6 +73,12 @@
           "enum": ["info", "debug"],
           "default": "info",
           "description": "输出面板日志级别；debug 额外显示排查用细节（如代理层反馈上报降级）"
+        },
+        "nexusMcp.writeGate": {
+          "type": "string",
+          "enum": ["off", "destructive", "all"],
+          "default": "destructive",
+          "description": "写操作门控：off 不确认；destructive（默认）删除/重命名/停 PIE/manage 删除类 op；all 所有写操作。确认框可选允许 / 拒绝 / 本会话总是允许。"
         }
       }
     },
@@ -92,6 +98,14 @@
       {
         "command": "nexus.copyMcpConfig",
         "title": "Nexus MCP: 复制 MCP 客户端配置"
+      },
+      {
+        "command": "nexus.pauseAgent",
+        "title": "Nexus MCP: 暂停 Agent 转发"
+      },
+      {
+        "command": "nexus.resumeAgent",
+        "title": "Nexus MCP: 恢复 Agent 转发"
       }
     ]
   },
@@ -99,7 +113,8 @@
     "build": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --sourcemap",
     "watch": "npm run build -- --watch",
     "package": "vsce package",
-    "lint": "eslint src/"
+    "lint": "eslint src/",
+    "test:policy": "esbuild src/proxy/index.ts --bundle --outfile=dist/sessionHub.cjs --format=cjs --platform=node && node scripts/test-session-policy.cjs"
   },
   "dependencies": {
     "ws": "^8.18.2"

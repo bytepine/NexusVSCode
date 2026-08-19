@@ -1,6 +1,8 @@
 // Copyright byteyang. All Rights Reserved.
 
 import { UnrealInstanceManager, type WsRequestResult } from "../unreal/UnrealInstanceManager";
+import { parseCall } from "../proxy/sessionPolicy";
+import { deniedErrorData, wrapCached, wrapDegraded } from "../proxy/SessionHub";
 
 /**
  * MCP 会话状态。
@@ -201,6 +203,37 @@ export class NexusMcpDispatcher {
             if (toolName === "connect_unreal_instance") return this.handleConnect(id, params.arguments as Record<string, unknown> | undefined);
         }
 
+        const args = params.arguments as Record<string, unknown> | undefined;
+        const callInfo = parseCall(toolName, args);
+        const hub = this.unrealManager.sessionHub;
+        await hub.waitIfPaused();
+        const gate = await hub.confirmIfNeeded(callInfo);
+        if (gate === "deny") {
+            return makeError(id, INTERNAL_ERROR, "Write blocked by proxy gate (user denied).", deniedErrorData());
+        }
+
+        hub.beginCall(callInfo);
+        try {
+            return await this.forwardRemoteCall(id, params, toolName, proxyConfig, callInfo);
+        } finally {
+            hub.endCall();
+        }
+    }
+
+    private async forwardRemoteCall(
+        id: unknown,
+        params: Record<string, unknown>,
+        toolName: string,
+        proxyConfig: ReturnType<UnrealInstanceManager["getProxyConfig"]>,
+        callInfo: ReturnType<typeof parseCall>,
+    ): Promise<string> {
+        const hub = this.unrealManager.sessionHub;
+        const now = Date.now();
+        const fresh = hub.lookupFresh(callInfo, now);
+        if (fresh) {
+            return makeResult(id, wrapCached(fresh.result, fresh.kind, fresh.snapshotAt) as Record<string, unknown>);
+        }
+
         // 可选 targetPort：一次性路由到指定实例，不改动长连接绑定
         const forwardParams = { ...params };
         let targetPort = -1;
@@ -225,6 +258,10 @@ export class NexusMcpDispatcher {
             }
         }
         if (outcome.status === "disconnected") {
+            const snap = hub.lookupDegraded(callInfo, now);
+            if (snap) {
+                return makeResult(id, wrapDegraded(snap.result, snap.snapshotAt) as Record<string, unknown>);
+            }
             this.unrealManager.proxyFeedbackBuffer.enqueue({
                 category: "proxy_disconnect",
                 tool: toolName,
@@ -248,7 +285,8 @@ export class NexusMcpDispatcher {
         }
         const response = outcome.response;
         if (response.result !== undefined) {
-            return makeResult(id, response.result as Record<string, unknown>);
+            const stored = hub.store(callInfo, response.result, now);
+            return makeResult(id, stored as Record<string, unknown>);
         }
         if (response.error !== undefined) {
             const err = response.error as Record<string, unknown>;

@@ -44,6 +44,7 @@ VSCode / Cursor 端 MCP **代理**：本地 HTTP 服务器（默认 `:6900`）�
 | `nexusMcp.scanPortStart` | `45000` | UE 扫描起始 |
 | `nexusMcp.scanPortEnd` | `45100` | UE 扫描结束 |
 | `nexusMcp.scanIntervalSeconds` | `5` | 定时发现间隔（秒） |
+| `nexusMcp.writeGate` | `destructive` | 写门控：`off` / `destructive`（删除、重命名、停 PIE、manage 删除类 op）/ `all` |
 
 ### 4. 状态栏与命令
 
@@ -55,8 +56,10 @@ VSCode / Cursor 端 MCP **代理**：本地 HTTP 服务器（默认 `:6900`）�
 | `Nexus MCP: 选择 UE 实例` | 弹出列表并连接 |
 | `Nexus MCP: 断开 UE 连接` | 断开当前 WebSocket |
 | `Nexus MCP: 复制 MCP 客户端配置` | 复制 AI 客户端 JSON |
+| `Nexus MCP: 暂停 Agent 转发` | 后续远端调用在代理排队，不发往 UE |
+| `Nexus MCP: 恢复 Agent 转发` | 解除暂停 |
 
-唯一实例自动连接；多实例优先 `netRole=Editor`。断线保留工具列表缓存。
+唯一实例自动连接；多实例优先 `netRole=Editor`。断线保留工具列表缓存；耐久读可返回带 `_proxy.degraded` 的上次快照。会话层契约见 [proxy-session.md](https://github.com/bytepine/NexusLink/blob/master/docs/proxy-session.md)。
 
 ---
 

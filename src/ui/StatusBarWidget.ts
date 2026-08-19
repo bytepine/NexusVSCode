@@ -51,11 +51,20 @@ export class StatusBarWidget implements vscode.Disposable {
             this.item.tooltip = "Nexus MCP 已在设置中禁用";
             return;
         }
+        const activity = mgr.sessionHub.getActivity();
+        if (activity?.paused) {
+            this.item.text = "$(debug-pause) NexusLink: 已暂停";
+            this.item.tooltip = this.buildTooltip(undefined, undefined, "Agent 转发已暂停；命令面板「恢复 Agent 转发」继续");
+            return;
+        }
         if (mgr.connectedPort > 0) {
             const info = mgr.instances.find(i => i.port === mgr.connectedPort);
             const name = info?.projectName || `${mgr.connectedPort}`;
-            this.item.text = `$(plug) NexusLink: ${name}`;
-            this.item.tooltip = this.buildTooltip(info?.projectName, info?.engineVersion);
+            const act = activity?.capability
+                ? ` · ${activity.capability}${activity.identity ? " " + truncate(activity.identity, 32) : ""}`
+                : "";
+            this.item.text = `$(plug) NexusLink: ${name}${act}`;
+            this.item.tooltip = this.buildTooltip(info?.projectName, info?.engineVersion, activityLine(activity));
         } else {
             const count = mgr.instances.length;
             this.item.text = count > 0
@@ -65,7 +74,7 @@ export class StatusBarWidget implements vscode.Disposable {
         }
     }
 
-    private buildTooltip(projectName?: string, engineVersion?: string): string {
+    private buildTooltip(projectName?: string, engineVersion?: string, extra?: string): string {
         const lines: string[] = [];
         // MCP 服务器地址行（与 Rider tooltip 对齐）
         if (this.serverPort > 0) {
@@ -80,6 +89,7 @@ export class StatusBarWidget implements vscode.Disposable {
         } else {
             lines.push("UE：未连接");
         }
+        if (extra) lines.push(extra);
         lines.push("点击管理 UE 实例");
         return lines.join("\n");
     }
@@ -87,4 +97,15 @@ export class StatusBarWidget implements vscode.Disposable {
     dispose(): void {
         this.item.dispose();
     }
+}
+
+function truncate(s: string, n: number): string {
+    return s.length <= n ? s : s.slice(0, n - 1) + "…";
+}
+
+function activityLine(activity: { capability: string; identity: string } | null | undefined): string | undefined {
+    if (!activity?.capability) return undefined;
+    return activity.identity
+        ? `最近调用：${activity.capability} → ${activity.identity}`
+        : `最近调用：${activity.capability}`;
 }
