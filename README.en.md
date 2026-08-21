@@ -67,13 +67,16 @@ A single instance auto-connects; multiple instances prefer `netRole=Editor`. Too
 
 Set `nexusMcp.enabled = true` first. Default `http://127.0.0.1:6900/stream`. On collision, use the startup notice.
 
-**Cursor** (`~/.cursor/mcp.json`):
+**Cursor** (`~/.cursor/mcp.json`). Copy the snippet (including token) from the command palette:
 
 ```json
 {
   "mcpServers": {
     "nexus-unreal": {
-      "url": "http://127.0.0.1:6900/stream"
+      "url": "http://127.0.0.1:6900/stream",
+      "headers": {
+        "Authorization": "Bearer <token>"
+      }
     }
   }
 }

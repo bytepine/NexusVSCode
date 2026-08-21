@@ -1,6 +1,7 @@
 // Copyright byteyang. All Rights Reserved.
 
 import * as vscode from "vscode";
+import * as crypto from "crypto";
 import { UnrealInstanceManager } from "./unreal/UnrealInstanceManager";
 import { NexusMcpHttpServer, findAvailablePort } from "./mcp/NexusMcpServer";
 import { StatusBarWidget } from "./ui/StatusBarWidget";
@@ -16,6 +17,16 @@ let scanTimer: ReturnType<typeof setInterval> | null = null;
 let preferredHttpPort = 0;
 /** 命令只注册一次，热重启时复用（VSCode 不支持 registerCommand 同 id 重复注册）。 */
 let commandsRegistered = false;
+const PROXY_TOKEN_SECRET = "nexusMcp.proxyToken";
+
+async function getOrCreateProxyToken(context: vscode.ExtensionContext): Promise<string> {
+    let token = await context.secrets.get(PROXY_TOKEN_SECRET);
+    if (!token) {
+        token = crypto.randomBytes(32).toString("hex");
+        await context.secrets.store(PROXY_TOKEN_SECRET, token);
+    }
+    return token;
+}
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
     logger.init(context);
@@ -80,7 +91,8 @@ async function startAll(
 
     // 启动 HTTP MCP 服务器（注入运行时版本号，由 packageJSON 读取）
     const pluginVersion = (context.extension.packageJSON as Record<string, unknown>).version as string ?? "0.0.0";
-    httpServer = new NexusMcpHttpServer(manager, pluginVersion);
+    const proxyToken = await getOrCreateProxyToken(context);
+    httpServer = new NexusMcpHttpServer(manager, pluginVersion, proxyToken);
     const port = await findAvailablePort(config.httpPort);
     if (port < 0) {
         const msg = `端口 ${config.httpPort} 及后续 100 个端口均被占用，服务器未启动`;
@@ -157,7 +169,7 @@ async function startAll(
             }),
             vscode.commands.registerCommand("nexus.copyMcpConfig", () => {
                 if (httpServer?.isRunning) {
-                    copyMcpConfig(httpServer.port);
+                    copyMcpConfig(httpServer.port, httpServer.getProxyToken());
                 }
             }),
             vscode.commands.registerCommand("nexus.pauseAgent", () => {
@@ -242,6 +254,7 @@ async function restartHttpServer(
     httpServer = new NexusMcpHttpServer(
         manager,
         (context.extension.packageJSON as Record<string, unknown>).version as string ?? "0.0.0",
+        await getOrCreateProxyToken(context),
     );
     const port = await findAvailablePort(config.httpPort);
     if (port < 0) {

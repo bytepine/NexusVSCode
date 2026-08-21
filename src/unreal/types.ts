@@ -12,6 +12,8 @@ export interface UnrealInstanceInfo {
     netRole?: string;
     /** UE 工具列表暴露模式（历史字段），供状态探测。 */
     toolsListMode?: string;
+    /** 实例注册文件中的鉴权 token；探活后再读，不来自 /status。 */
+    authToken?: string;
 }
 
 /**

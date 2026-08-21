@@ -5,6 +5,12 @@ import * as crypto from "crypto";
 import * as net from "net";
 import { NexusMcpDispatcher } from "./NexusMcpDispatcher";
 import type { UnrealInstanceManager } from "../unreal/UnrealInstanceManager";
+import {
+    extractBearerToken,
+    hasBrowserOrigin,
+    MAX_MCP_BODY_BYTES,
+    tokensEqual,
+} from "../util/mcpAuth";
 
 const MCP_SESSION_HEADER = "mcp-session-id";
 
@@ -12,7 +18,6 @@ const MCP_SESSION_HEADER = "mcp-session-id";
  * nexus-vscode 独立 MCP HTTP 服务器（per-session 会话隔离）。
  *   POST /stream   → Streamable HTTP，通过 Mcp-Session-Id 头隔离会话
  *   GET  /sse      → SSE 长连接，仅用于服务端推送通知
- *   OPTIONS /stream, OPTIONS /sse → CORS 预检
  */
 export class NexusMcpHttpServer {
 
@@ -36,9 +41,13 @@ export class NexusMcpHttpServer {
     /** 插件版本号，由 extension.ts 从 packageJSON 读取后注入，透传给每个 Dispatcher。 */
     private readonly serverVersion: string;
 
-    constructor(manager: UnrealInstanceManager, serverVersion = "0.0.0") {
+    /** Agent → 代理的 Bearer token。 */
+    private readonly proxyToken: string;
+
+    constructor(manager: UnrealInstanceManager, serverVersion = "0.0.0", proxyToken = "") {
         this.manager = manager;
         this.serverVersion = serverVersion;
+        this.proxyToken = proxyToken;
     }
 
     async start(port: number): Promise<boolean> {
@@ -48,10 +57,15 @@ export class NexusMcpHttpServer {
             const path = (req.url ?? "/").split("?")[0];
             const method = req.method ?? "";
 
-            if (method === "OPTIONS" && (path === "/stream" || path === "/sse")) {
-                addCorsHeaders(res);
-                res.writeHead(204);
-                res.end();
+            if (hasBrowserOrigin(req)) {
+                res.writeHead(403, { "Content-Type": "application/json" });
+                res.end(JSON.stringify({ error: "Browser Origin is not allowed" }));
+                return;
+            }
+
+            if (!tokensEqual(extractBearerToken(req), this.proxyToken) || !this.proxyToken) {
+                res.writeHead(401, { "Content-Type": "application/json" });
+                res.end(JSON.stringify({ error: "Missing or invalid Authorization: Bearer token" }));
                 return;
             }
 
@@ -60,7 +74,6 @@ export class NexusMcpHttpServer {
                 return;
             }
 
-            // Streamable HTTP 规范要求 GET /stream 建立 SSE 流
             if (path === "/stream" && method === "GET") {
                 this.handleSse(res);
                 return;
@@ -71,7 +84,6 @@ export class NexusMcpHttpServer {
                 return;
             }
 
-            addCorsHeaders(res);
             res.writeHead(404, { "Content-Type": "application/json" });
             res.end(JSON.stringify({ error: "Not Found" }));
         });
@@ -86,14 +98,35 @@ export class NexusMcpHttpServer {
     }
 
     private async handlePost(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
+        const declared = Number(req.headers["content-length"] ?? 0);
+        if (declared > MAX_MCP_BODY_BYTES) {
+            res.writeHead(413, { "Content-Type": "application/json" });
+            res.end(JSON.stringify({ error: "payload too large" }));
+            req.destroy();
+            return;
+        }
+
         let body = "";
+        let bodyBytes = 0;
         req.setEncoding("utf8");
-        for await (const chunk of req) {
-            body += chunk;
+        try {
+            for await (const chunk of req) {
+                bodyBytes += Buffer.byteLength(chunk as string, "utf8");
+                if (bodyBytes > MAX_MCP_BODY_BYTES) {
+                    res.writeHead(413, { "Content-Type": "application/json" });
+                    res.end(JSON.stringify({ error: "payload too large" }));
+                    req.destroy();
+                    return;
+                }
+                body += chunk;
+            }
+        } catch {
+            res.writeHead(400, { "Content-Type": "application/json" });
+            res.end(JSON.stringify({ error: "invalid body" }));
+            return;
         }
 
         if (!body.trim()) {
-            addCorsHeaders(res);
             res.writeHead(400, { "Content-Type": "application/json" });
             res.end(JSON.stringify({ error: "empty body" }));
             return;
@@ -134,7 +167,6 @@ export class NexusMcpHttpServer {
             sessionId = incomingSessionId;
             dispatcher = this.httpSessions.get(sessionId)!;
         } else {
-            addCorsHeaders(res);
             res.writeHead(404, { "Content-Type": "application/json" });
             res.end(JSON.stringify({ error: "Invalid or missing Mcp-Session-Id" }));
             return;
@@ -142,7 +174,6 @@ export class NexusMcpHttpServer {
 
         try {
             const responseJson = await dispatcher.dispatch(body);
-            addCorsHeaders(res);
             res.setHeader(MCP_SESSION_HEADER, sessionId);
             if (!responseJson) {
                 res.writeHead(202);
@@ -152,7 +183,6 @@ export class NexusMcpHttpServer {
                 res.end(responseJson);
             }
         } catch (e) {
-            addCorsHeaders(res);
             res.writeHead(500, { "Content-Type": "application/json" });
             res.end(JSON.stringify({ error: "internal error" }));
         }
@@ -164,7 +194,6 @@ export class NexusMcpHttpServer {
      * 每 SSE_KEEPALIVE_MS 写一行注释帧避免经反代/NAT idle 被断开。
      */
     private handleSse(res: http.ServerResponse): void {
-        addCorsHeaders(res);
         res.writeHead(200, {
             "Content-Type": "text/event-stream",
             "Cache-Control": "no-cache",
@@ -242,6 +271,10 @@ export class NexusMcpHttpServer {
     get isRunning(): boolean {
         return this.httpServer?.listening === true;
     }
+
+    getProxyToken(): string {
+        return this.proxyToken;
+    }
 }
 
 /**
@@ -265,11 +298,4 @@ function isPortAvailable(port: number): Promise<boolean> {
             server.close(() => resolve(true));
         });
     });
-}
-
-function addCorsHeaders(res: http.ServerResponse): void {
-    res.setHeader("Access-Control-Allow-Origin", "*");
-    res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-    res.setHeader("Access-Control-Allow-Headers", "Content-Type, Mcp-Session-Id");
-    res.setHeader("Access-Control-Expose-Headers", "Mcp-Session-Id");
 }

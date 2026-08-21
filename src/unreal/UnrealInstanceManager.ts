@@ -6,6 +6,7 @@ import { EventEmitter } from "events";
 import type { UnrealInstanceInfo } from "./types";
 import { DEFAULT_PROXY_CONFIG, parseProxyConfig, type ProxyConfig } from "./proxyConfig";
 import { logger } from "../util/logger";
+import { readUeAuthToken } from "../util/mcpAuth";
 import { ProxyFeedbackBuffer, isMethodNotFoundError, type ProxyFeedbackEvent } from "./ProxyFeedbackBuffer";
 import { SessionHub } from "../proxy/SessionHub";
 
@@ -240,6 +241,7 @@ export class UnrealInstanceManager extends EventEmitter {
                         engineVersion: json.engineVersion ?? "",
                         netRole: json.netRole ?? undefined,
                         toolsListMode: json.toolsListMode ?? "starter",
+                        authToken: readUeAuthToken(port),
                     });
                         } catch {
                             resolve(null);
@@ -277,21 +279,32 @@ export class UnrealInstanceManager extends EventEmitter {
             let settled = false;
 
             socket.on("open", () => {
-                this.ws = socket;
-                this.connectedPort = port;
-                this.connectedToolsListMode = info.toolsListMode ?? "starter";
-                this.attachWsKeepalive(socket);
-                this.emit("connectionChanged", port);
-                if (!settled) {
-                    settled = true;
-                    resolve(true);
-                }
-                // 异步拉取 UE 端 instructions / proxy_config 缓存
-                this.fetchUpstreamInstructions().catch(() => { /* ignore */ });
-                this.fetchProxyConfig().catch(() => { /* ignore */ });
+                const token = info.authToken ?? readUeAuthToken(port);
+                void this.authWsSocket(socket, token).then(ok => {
+                    if (!ok || this.connectionEpoch !== epoch) {
+                        try { socket.close(); } catch { /* ignore */ }
+                        if (!settled) {
+                            settled = true;
+                            resolve(false);
+                        }
+                        return;
+                    }
+                    this.ws = socket;
+                    this.connectedPort = port;
+                    this.connectedToolsListMode = info.toolsListMode ?? "starter";
+                    this.attachWsKeepalive(socket);
+                    this.emit("connectionChanged", port);
+                    if (!settled) {
+                        settled = true;
+                        resolve(true);
+                    }
+                    this.fetchUpstreamInstructions().catch(() => { /* ignore */ });
+                    this.fetchProxyConfig().catch(() => { /* ignore */ });
+                });
             });
 
             socket.on("message", (data: WebSocket.RawData) => {
+                if (this.ws !== socket) return;
                 this.handleWsMessage(rawDataToUtf8(data));
             });
 
@@ -534,7 +547,14 @@ export class UnrealInstanceManager extends EventEmitter {
             const timer = setTimeout(() => finish({ status: "timeout" }), timeoutMs);
 
             socket.on("open", () => {
-                socket.send(JSON.stringify({ jsonrpc: "2.0", id, method: "tools/call", params }));
+                const token = info.authToken ?? readUeAuthToken(port);
+                void this.authWsSocket(socket, token).then(ok => {
+                    if (!ok) {
+                        finish({ status: "disconnected" });
+                        return;
+                    }
+                    socket.send(JSON.stringify({ jsonrpc: "2.0", id, method: "tools/call", params }));
+                });
             });
             socket.on("message", (data: WebSocket.RawData) => {
                 try {
@@ -599,6 +619,43 @@ export class UnrealInstanceManager extends EventEmitter {
                 this.pendingRequests.delete(id);
                 this.scheduleWsKeepalive();
                 resolve({ status: "disconnected" });
+            }
+        });
+    }
+
+    /** WS 首帧 auth；失败则不得转发 tools/call。 */
+    private authWsSocket(socket: WebSocket, token?: string): Promise<boolean> {
+        if (!token) {
+            logger.warn("未找到 UE authToken（实例注册文件），拒绝连接");
+            return Promise.resolve(false);
+        }
+        const id = this.idCounter++;
+        return new Promise(resolve => {
+            const timer = setTimeout(() => {
+                socket.off("message", onMsg);
+                resolve(false);
+            }, 3000);
+            const onMsg = (data: WebSocket.RawData): void => {
+                try {
+                    const json = JSON.parse(rawDataToUtf8(data)) as Record<string, unknown>;
+                    if (json.id !== id) return;
+                    socket.off("message", onMsg);
+                    clearTimeout(timer);
+                    const result = json.result as { ok?: boolean } | undefined;
+                    resolve(!!result?.ok && json.error === undefined);
+                } catch {
+                    socket.off("message", onMsg);
+                    clearTimeout(timer);
+                    resolve(false);
+                }
+            };
+            socket.on("message", onMsg);
+            try {
+                socket.send(JSON.stringify({ jsonrpc: "2.0", id, method: "auth", params: { token } }));
+            } catch {
+                clearTimeout(timer);
+                socket.off("message", onMsg);
+                resolve(false);
             }
         });
     }

@@ -67,13 +67,16 @@ VSCode / Cursor 端 MCP **代理**：本地 HTTP 服务器（默认 `:6900`）�
 
 须先 `nexusMcp.enabled = true`。默认 `http://127.0.0.1:6900/stream`。端口顺延时以启动通知为准。
 
-**Cursor**（`~/.cursor/mcp.json`）：
+**Cursor**（`~/.cursor/mcp.json`）。Token 从命令面板「复制 MCP 配置」取得：
 
 ```json
 {
   "mcpServers": {
     "nexus-unreal": {
-      "url": "http://127.0.0.1:6900/stream"
+      "url": "http://127.0.0.1:6900/stream",
+      "headers": {
+        "Authorization": "Bearer <token>"
+      }
     }
   }
 }
