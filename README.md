@@ -4,7 +4,7 @@
 
 VSCode / Cursor 端 MCP **代理**：本地 HTTP 服务器（默认 `:6900`），发现 UE 实例，经 WebSocket 把 AI 工具调用转发给 **NexusLink**。蓝图、资产、PIE 等能力由 UE 侧提供，本扩展不实现游戏逻辑。
 
-四端端口与开关层数见 [NexusLink 使用指南](https://github.com/bytepine/NexusLink/blob/master/docs/usage-guide.md)。本扩展是三层开关中的 IDE 层。
+四端端口与开关层数见 [NexusLink 使用指南](https://github.com/bytepine/NexusLink/blob/master/docs/usage-guide.md)。本扩展是三层开关中的 IDE 层。本机不要与 NexusDesktop / Rider 代理同时开。
 
 ---
 
@@ -40,7 +40,7 @@ VSCode / Cursor 端 MCP **代理**：本地 HTTP 服务器（默认 `:6900`）�
 | 配置键 | 默认值 | 说明 |
 |--------|--------|------|
 | `nexusMcp.enabled` | `false` | 总开关；改值立即启停 |
-| `nexusMcp.httpPort` | `6900` | AI 客户端端口；修改后重载窗口或关开 `enabled` |
+| `nexusMcp.httpPort` | `6900` | AI 客户端端口；修改后立即重启监听 |
 | `nexusMcp.scanPortStart` | `45000` | UE 扫描起始 |
 | `nexusMcp.scanPortEnd` | `45100` | UE 扫描结束 |
 | `nexusMcp.scanIntervalSeconds` | `5` | 定时发现间隔（秒） |

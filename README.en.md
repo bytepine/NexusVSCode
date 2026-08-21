@@ -4,7 +4,7 @@
 
 VSCode / Cursor MCP **proxy**: local HTTP server (default `:6900`), discovers UE instances, and forwards AI tool calls to **NexusLink** over WebSocket. Blueprints, assets, PIE, and other capabilities come from the UE plugin; this extension does not implement game logic.
 
-Ports and switch layers: [NexusLink usage guide](https://github.com/bytepine/NexusLink/blob/master/docs/usage-guide.md). This extension is the IDE layer of the three-layer switch.
+Ports and switch layers: [NexusLink usage guide](https://github.com/bytepine/NexusLink/blob/master/docs/usage-guide.md). This extension is the IDE layer of the three-layer switch. Do not run NexusDesktop or the Rider proxy on the same machine at the same time.
 
 ---
 
@@ -40,7 +40,7 @@ Then **Settings** → search `nexusMcp` → **Nexus Mcp: Enabled** = `true` (def
 | Key | Default | Notes |
 |-----|---------|-------|
 | `nexusMcp.enabled` | `false` | Master switch; starts/stops immediately |
-| `nexusMcp.httpPort` | `6900` | AI client port; reload or toggle `enabled` after changing |
+| `nexusMcp.httpPort` | `6900` | AI client port; listen restarts immediately after changing |
 | `nexusMcp.scanPortStart` | `45000` | UE scan start |
 | `nexusMcp.scanPortEnd` | `45100` | UE scan end |
 | `nexusMcp.scanIntervalSeconds` | `5` | Discovery interval (seconds) |

@@ -12,6 +12,8 @@ let manager: UnrealInstanceManager | null = null;
 let httpServer: NexusMcpHttpServer | null = null;
 let statusBar: StatusBarWidget | null = null;
 let scanTimer: ReturnType<typeof setInterval> | null = null;
+/** 当前已按此首选端口启动 HTTP；与配置 httpPort 不同则需重启监听。 */
+let preferredHttpPort = 0;
 /** 命令只注册一次，热重启时复用（VSCode 不支持 registerCommand 同 id 重复注册）。 */
 let commandsRegistered = false;
 
@@ -34,11 +36,15 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
                 await startAll(context, newConfig);
                 return;
             }
+            warnPortOverlap(newConfig);
             // 热更新扫描端口范围并重置扫描定时器
             manager.scanPortStart = newConfig.scanPortStart;
             manager.scanPortEnd = newConfig.scanPortEnd;
             manager.sessionHub.writeGate = newConfig.writeGate;
             startScanTimer(newConfig.scanIntervalSeconds);
+            if (newConfig.httpPort !== preferredHttpPort) {
+                await restartHttpServer(context, newConfig);
+            }
         }),
     );
 }
@@ -70,14 +76,7 @@ async function startAll(
     });
     manager.sessionHub.on("activity", () => statusBar?.refresh());
 
-    // 检测 MCP 端口与 UE 扫描区间重叠，误配时 AI 会把代理自身当 UE 实例扫到
-    const scanMin = Math.min(config.scanPortStart, config.scanPortEnd);
-    const scanMax = Math.max(config.scanPortStart, config.scanPortEnd);
-    if (config.httpPort >= scanMin && config.httpPort <= scanMax) {
-        const warnMsg = `MCP 端口 ${config.httpPort} 与 UE 扫描区间 [${scanMin}, ${scanMax}] 重叠，可能导致代理端口被误当 UE 实例探测，请调整配置`;
-        logger.warn(warnMsg);
-        vscode.window.showWarningMessage(`Nexus MCP: ${warnMsg}`);
-    }
+    warnPortOverlap(config);
 
     // 启动 HTTP MCP 服务器（注入运行时版本号，由 packageJSON 读取）
     const pluginVersion = (context.extension.packageJSON as Record<string, unknown>).version as string ?? "0.0.0";
@@ -99,6 +98,7 @@ async function startAll(
         await stopAll();
         return;
     }
+    preferredHttpPort = config.httpPort;
 
     const portNote = port !== config.httpPort
         ? `（端口 ${config.httpPort} 被占用，实际端口：${port}）`
@@ -188,6 +188,7 @@ async function stopAll(): Promise<void> {
     manager = null;
     await httpServer?.stop();
     httpServer = null;
+    preferredHttpPort = 0;
     // 状态栏保留不 dispose（命令和 UI 生命周期随扩展），但需解除对已释放 manager 的引用
     statusBar?.setServerPort(0);
     statusBar?.detach();
@@ -216,4 +217,56 @@ function startScanTimer(intervalSeconds: number): void {
 
     // 首次立即扫描
     manager.maintainConnection().then(() => statusBar?.refresh());
+}
+
+function warnPortOverlap(config: ReturnType<typeof getConfig>): void {
+    const scanMin = Math.min(config.scanPortStart, config.scanPortEnd);
+    const scanMax = Math.max(config.scanPortStart, config.scanPortEnd);
+    if (config.httpPort >= scanMin && config.httpPort <= scanMax) {
+        const warnMsg = `MCP 端口 ${config.httpPort} 与 UE 扫描区间 [${scanMin}, ${scanMax}] 重叠，可能导致代理端口被误当 UE 实例探测，请调整配置`;
+        logger.warn(warnMsg);
+        vscode.window.showWarningMessage(`Nexus MCP: ${warnMsg}`);
+    }
+}
+
+/** 仅重启 MCP HTTP，保留已有 UE 管理器与扫描定时器。 */
+async function restartHttpServer(
+    context: vscode.ExtensionContext,
+    config: ReturnType<typeof getConfig>,
+): Promise<void> {
+    if (!manager) {
+        await startAll(context, config);
+        return;
+    }
+    await httpServer?.stop();
+    httpServer = new NexusMcpHttpServer(
+        manager,
+        (context.extension.packageJSON as Record<string, unknown>).version as string ?? "0.0.0",
+    );
+    const port = await findAvailablePort(config.httpPort);
+    if (port < 0) {
+        const msg = `端口 ${config.httpPort} 及后续 100 个端口均被占用，服务器未启动`;
+        logger.error(msg);
+        vscode.window.showErrorMessage(`Nexus MCP: ${msg}`);
+        await stopAll();
+        return;
+    }
+    const started = await httpServer.start(port);
+    if (!started) {
+        const msg = `服务器启动失败（端口 ${port}）`;
+        logger.error(msg);
+        vscode.window.showErrorMessage(`Nexus MCP: ${msg}`);
+        await stopAll();
+        return;
+    }
+    preferredHttpPort = config.httpPort;
+    const portNote = port !== config.httpPort
+        ? `（端口 ${config.httpPort} 被占用，实际端口：${port}）`
+        : "";
+    logger.info(`MCP 服务器已重启：http://127.0.0.1:${port}/stream ${portNote}`);
+    vscode.window.setStatusBarMessage(
+        `Nexus MCP 已就绪：http://127.0.0.1:${port}/stream ${portNote}`,
+        5000,
+    );
+    statusBar?.setServerPort(port);
 }
