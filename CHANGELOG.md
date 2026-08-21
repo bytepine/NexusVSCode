@@ -7,6 +7,10 @@
 
 ## [Unreleased]
 
+## [2.0.0-beta.1] - 2026-08-21
+
+> ⚠️ Pre-release，非生产环境使用。
+
 ### Added
 
 - feat(mcp): 代理会话层——消费 UE `_ttl_seconds`/`_snapshotAt` 做读缓存与 30s section 短路；UE 不可达时对耐久读返回 `degraded: unavailable` 快照；`nexusMcp.writeGate`（off / destructive / all）确认破坏性写；命令「暂停/恢复 Agent 转发」；状态栏显示最近调用；超大响应落盘 `nexus-mcp-offload/`
