@@ -38,6 +38,9 @@ export class NexusMcpHttpServer {
 
     port = 0;
 
+    /** HTTP 绑定：默认 127.0.0.1；listenLan 时 0.0.0.0。 */
+    bindHost = "127.0.0.1";
+
     /** 插件版本号，由 extension.ts 从 packageJSON 读取后注入，透传给每个 Dispatcher。 */
     private readonly serverVersion: string;
 
@@ -50,7 +53,7 @@ export class NexusMcpHttpServer {
         this.proxyToken = proxyToken;
     }
 
-    async start(port: number): Promise<boolean> {
+    async start(port: number, bindHost = "127.0.0.1"): Promise<boolean> {
         if (this.httpServer) return true;
 
         this.httpServer = http.createServer(async (req, res) => {
@@ -90,8 +93,9 @@ export class NexusMcpHttpServer {
 
         return new Promise<boolean>(resolve => {
             this.httpServer!.on("error", () => resolve(false));
-            this.httpServer!.listen(port, "127.0.0.1", () => {
+            this.httpServer!.listen(port, bindHost, () => {
                 this.port = port;
+                this.bindHost = bindHost;
                 resolve(true);
             });
         });
@@ -280,21 +284,25 @@ export class NexusMcpHttpServer {
 /**
  * 从 startPort 开始尝试绑定，找到第一个可用端口。
  */
-export async function findAvailablePort(startPort: number, maxAttempts = 100): Promise<number> {
+export async function findAvailablePort(
+    startPort: number,
+    maxAttempts = 100,
+    bindHost = "127.0.0.1",
+): Promise<number> {
     for (let i = 0; i < maxAttempts; i++) {
         const port = startPort + i;
         if (port > 65535) break;
-        const available = await isPortAvailable(port);
+        const available = await isPortAvailable(port, bindHost);
         if (available) return port;
     }
     return -1;
 }
 
-function isPortAvailable(port: number): Promise<boolean> {
+function isPortAvailable(port: number, bindHost: string): Promise<boolean> {
     return new Promise(resolve => {
         const server = net.createServer();
         server.once("error", () => resolve(false));
-        server.listen(port, "127.0.0.1", () => {
+        server.listen(port, bindHost, () => {
             server.close(() => resolve(true));
         });
     });

@@ -6,6 +6,7 @@ import * as vscode from "vscode";
  * NexusLink 扩展配置项（从 VSCode Configuration 读取）。
  */
 import { parseWriteGate, type WriteGateMode } from "../proxy/sessionPolicy";
+import { parseRemoteUnreal, type RemoteUnrealEntry } from "../util/lanHost";
 
 export interface NexusLinkConfig {
     enabled: boolean;
@@ -14,6 +15,8 @@ export interface NexusLinkConfig {
     scanPortEnd: number;
     scanIntervalSeconds: number;
     writeGate: WriteGateMode;
+    listenLan: boolean;
+    remoteUnreal: RemoteUnrealEntry[];
 }
 
 const SECTION = "nexusMcp";
@@ -28,6 +31,8 @@ export function getConfig(): NexusLinkConfig {
         scanPortEnd: cfg.get<number>("scanPortEnd", 45100),
         scanIntervalSeconds: cfg.get<number>("scanIntervalSeconds", 5),
         writeGate: parseWriteGate(cfg.get<string>("writeGate", "destructive")),
+        listenLan: cfg.get<boolean>("listenLan", false),
+        remoteUnreal: parseRemoteUnreal(cfg.get("remoteUnreal")),
     };
 }
 

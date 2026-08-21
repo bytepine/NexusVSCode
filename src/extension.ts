@@ -8,6 +8,7 @@ import { StatusBarWidget } from "./ui/StatusBarWidget";
 import { showInstancePicker, copyMcpConfig } from "./ui/InstancePicker";
 import { getConfig, onConfigChanged } from "./config/NexusLinkSettings";
 import { logger } from "./util/logger";
+import { mcpDisplayHost } from "./util/lanHost";
 
 let manager: UnrealInstanceManager | null = null;
 let httpServer: NexusMcpHttpServer | null = null;
@@ -15,6 +16,7 @@ let statusBar: StatusBarWidget | null = null;
 let scanTimer: ReturnType<typeof setInterval> | null = null;
 /** 当前已按此首选端口启动 HTTP；与配置 httpPort 不同则需重启监听。 */
 let preferredHttpPort = 0;
+let preferredListenLan = false;
 /** 命令只注册一次，热重启时复用（VSCode 不支持 registerCommand 同 id 重复注册）。 */
 let commandsRegistered = false;
 const PROXY_TOKEN_SECRET = "nexusMcp.proxyToken";
@@ -51,9 +53,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             // 热更新扫描端口范围并重置扫描定时器
             manager.scanPortStart = newConfig.scanPortStart;
             manager.scanPortEnd = newConfig.scanPortEnd;
+            manager.remoteUnreal = newConfig.remoteUnreal;
             manager.sessionHub.writeGate = newConfig.writeGate;
             startScanTimer(newConfig.scanIntervalSeconds);
-            if (newConfig.httpPort !== preferredHttpPort) {
+            if (newConfig.httpPort !== preferredHttpPort || newConfig.listenLan !== preferredListenLan) {
                 await restartHttpServer(context, newConfig);
             }
         }),
@@ -71,6 +74,7 @@ async function startAll(
     manager = new UnrealInstanceManager();
     manager.scanPortStart = config.scanPortStart;
     manager.scanPortEnd = config.scanPortEnd;
+    manager.remoteUnreal = config.remoteUnreal;
     manager.sessionHub.writeGate = config.writeGate;
     manager.sessionHub.setGatePrompter(async info => {
         const target = info.identity ? ` → ${info.identity}` : "";
@@ -93,7 +97,8 @@ async function startAll(
     const pluginVersion = (context.extension.packageJSON as Record<string, unknown>).version as string ?? "0.0.0";
     const proxyToken = await getOrCreateProxyToken(context);
     httpServer = new NexusMcpHttpServer(manager, pluginVersion, proxyToken);
-    const port = await findAvailablePort(config.httpPort);
+    const bind = config.listenLan ? "0.0.0.0" : "127.0.0.1";
+    const port = await findAvailablePort(config.httpPort, 100, bind);
     if (port < 0) {
         const msg = `端口 ${config.httpPort} 及后续 100 个端口均被占用，服务器未启动`;
         logger.error(msg);
@@ -102,7 +107,7 @@ async function startAll(
         return;
     }
 
-    const started = await httpServer.start(port);
+    const started = await httpServer.start(port, bind);
     if (!started) {
         const msg = `服务器启动失败（端口 ${port}）`;
         logger.error(msg);
@@ -111,13 +116,18 @@ async function startAll(
         return;
     }
     preferredHttpPort = config.httpPort;
+    preferredListenLan = config.listenLan;
 
+    const displayHost = mcpDisplayHost(config.listenLan);
     const portNote = port !== config.httpPort
         ? `（端口 ${config.httpPort} 被占用，实际端口：${port}）`
         : "";
-    logger.info(`MCP 服务器已就绪：http://127.0.0.1:${port}/stream ${portNote}`);
+    const lanNote = config.listenLan && displayHost === "127.0.0.1"
+        ? "（未检测到局域网 IP，请把地址改成中转机网卡 IP）"
+        : "";
+    logger.info(`MCP 服务器已就绪：http://${displayHost}:${port}/stream ${portNote}${lanNote}`);
     vscode.window.setStatusBarMessage(
-        `Nexus MCP 已就绪：http://127.0.0.1:${port}/stream ${portNote}`,
+        `Nexus MCP 已就绪：http://${displayHost}:${port}/stream ${portNote}`,
         5000,
     );
 
@@ -169,7 +179,11 @@ async function startAll(
             }),
             vscode.commands.registerCommand("nexus.copyMcpConfig", () => {
                 if (httpServer?.isRunning) {
-                    copyMcpConfig(httpServer.port, httpServer.getProxyToken());
+                    copyMcpConfig(
+                        httpServer.port,
+                        httpServer.getProxyToken(),
+                        mcpDisplayHost(preferredListenLan),
+                    );
                 }
             }),
             vscode.commands.registerCommand("nexus.pauseAgent", () => {
@@ -201,6 +215,7 @@ async function stopAll(): Promise<void> {
     await httpServer?.stop();
     httpServer = null;
     preferredHttpPort = 0;
+    preferredListenLan = false;
     // 状态栏保留不 dispose（命令和 UI 生命周期随扩展），但需解除对已释放 manager 的引用
     statusBar?.setServerPort(0);
     statusBar?.detach();
@@ -256,7 +271,8 @@ async function restartHttpServer(
         (context.extension.packageJSON as Record<string, unknown>).version as string ?? "0.0.0",
         await getOrCreateProxyToken(context),
     );
-    const port = await findAvailablePort(config.httpPort);
+    const bind = config.listenLan ? "0.0.0.0" : "127.0.0.1";
+    const port = await findAvailablePort(config.httpPort, 100, bind);
     if (port < 0) {
         const msg = `端口 ${config.httpPort} 及后续 100 个端口均被占用，服务器未启动`;
         logger.error(msg);
@@ -264,7 +280,7 @@ async function restartHttpServer(
         await stopAll();
         return;
     }
-    const started = await httpServer.start(port);
+    const started = await httpServer.start(port, bind);
     if (!started) {
         const msg = `服务器启动失败（端口 ${port}）`;
         logger.error(msg);
@@ -273,12 +289,14 @@ async function restartHttpServer(
         return;
     }
     preferredHttpPort = config.httpPort;
+    preferredListenLan = config.listenLan;
+    const displayHost = mcpDisplayHost(config.listenLan);
     const portNote = port !== config.httpPort
         ? `（端口 ${config.httpPort} 被占用，实际端口：${port}）`
         : "";
-    logger.info(`MCP 服务器已重启：http://127.0.0.1:${port}/stream ${portNote}`);
+    logger.info(`MCP 服务器已重启：http://${displayHost}:${port}/stream ${portNote}`);
     vscode.window.setStatusBarMessage(
-        `Nexus MCP 已就绪：http://127.0.0.1:${port}/stream ${portNote}`,
+        `Nexus MCP 已就绪：http://${displayHost}:${port}/stream ${portNote}`,
         5000,
     );
     statusBar?.setServerPort(port);

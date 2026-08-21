@@ -7,6 +7,12 @@ import type { UnrealInstanceInfo } from "./types";
 import { DEFAULT_PROXY_CONFIG, parseProxyConfig, type ProxyConfig } from "./proxyConfig";
 import { logger } from "../util/logger";
 import { readUeAuthToken } from "../util/mcpAuth";
+import {
+    LOOPBACK_HOST,
+    instanceKey,
+    normalizeHost,
+    type RemoteUnrealEntry,
+} from "../util/lanHost";
 import { ProxyFeedbackBuffer, isMethodNotFoundError, type ProxyFeedbackEvent } from "./ProxyFeedbackBuffer";
 import { SessionHub } from "../proxy/SessionHub";
 
@@ -31,6 +37,7 @@ export class UnrealInstanceManager extends EventEmitter {
     instances: UnrealInstanceInfo[] = [];
 
     connectedPort = -1;
+    connectedHost = LOOPBACK_HOST;
 
     /** 当前连接的 UE 实例的工具列表模式（full/starter/custom），断连时重置为 "starter"。 */
     connectedToolsListMode = "starter";
@@ -43,6 +50,10 @@ export class UnrealInstanceManager extends EventEmitter {
      * 断连后自动重连优先连此端口，避免覆盖用户选择。
      */
     preferredPort = -1;
+    preferredHost = LOOPBACK_HOST;
+
+    /** 显式远程 UE（host + mcpPort + token）；不扫远程端口区间。 */
+    remoteUnreal: RemoteUnrealEntry[] = [];
 
     /**
      * 用户主动断开标志：为 true 时抑制自动重连，直到用户主动连接某实例后清除。
@@ -121,7 +132,7 @@ export class UnrealInstanceManager extends EventEmitter {
             // 有挂起请求 = 连接正被使用，本身即存活证明，跳过探测避免 GameThread 忙时误判
             if (this.pendingRequests.size > 0) return;
             if (this.fullScanCountdown-- > 0) {
-                const info = await this.probeStatus(this.connectedPort);
+                const info = await this.probeStatus(this.connectedPort, this.connectedHost);
                 if (info) return; // 心跳成功，省去全量扫描
                 // 确实失联（无挂起请求）→ 重置后转全量重扫
                 this.resetWsConnection(false);
@@ -159,22 +170,23 @@ export class UnrealInstanceManager extends EventEmitter {
         }
 
         // 已连接的实例不在本轮扫描结果中 → 自动断开
-        if (this.connectedPort > 0 && !found.some(i => i.port === this.connectedPort)) {
+        if (this.connectedPort > 0 && !found.some(i => this.isConnectedInfo(i))) {
             this.resetWsConnection(false);
         }
 
-        // 未连接时自动选择：优先用户 preferredPort，其次 Editor 实例，最后第一个
+        // 未连接时自动选择：优先用户 preferred，其次 Editor 实例，最后第一个
         // 用户手动断开后不自动重连，直到用户主动选择实例
         if (this.connectedPort < 0 && found.length > 0 && !this.manuallyDisconnected) {
             let target: UnrealInstanceInfo | null = null;
             if (this.preferredPort > 0) {
-                target = found.find(i => i.port === this.preferredPort) ?? null;
+                const pref = instanceKey(this.preferredHost, this.preferredPort);
+                target = found.find(i => instanceKey(i.host, i.port) === pref) ?? null;
             }
             if (!target) {
                 const editor = found.find(i => i.netRole?.toLowerCase() === "editor");
                 target = editor ?? found[0];
             }
-            if (target) await this.connectTo(target.port);
+            if (target) await this.connectTo(target.port, false, target.host);
         }
 
         return found;
@@ -192,21 +204,45 @@ export class UnrealInstanceManager extends EventEmitter {
         for (let port = start; port <= end; port += UnrealInstanceManager.SCAN_CONCURRENCY) {
             const batch: Promise<UnrealInstanceInfo | null>[] = [];
             for (let p = port; p < port + UnrealInstanceManager.SCAN_CONCURRENCY && p <= end; p++) {
-                batch.push(this.probeStatus(p));
+                batch.push(this.probeStatus(p, LOOPBACK_HOST));
             }
             const results = await Promise.all(batch);
             for (const r of results) {
                 if (r !== null) found.push(r);
             }
         }
+        for (const remote of this.remoteUnreal) {
+            const info = await this.probeStatus(remote.mcpPort, remote.host, remote.authToken);
+            if (info) {
+                found.push(info);
+            }
+        }
         return found;
     }
 
+    isConnectedInfo(info: UnrealInstanceInfo): boolean {
+        return this.connectedPort > 0
+            && instanceKey(info.host, info.port) === instanceKey(this.connectedHost, this.connectedPort);
+    }
+
+    private tokenFor(host: string | undefined, port: number): string | undefined {
+        const h = normalizeHost(host);
+        if (h === LOOPBACK_HOST) {
+            return readUeAuthToken(port);
+        }
+        return this.remoteUnreal.find(r => r.host === h && r.mcpPort === port)?.authToken;
+    }
+
     /** 通过 GET /status 探测 UE 实例。 */
-    private probeStatus(port: number): Promise<UnrealInstanceInfo | null> {
+    private probeStatus(
+        port: number,
+        host = LOOPBACK_HOST,
+        tokenOverride?: string,
+    ): Promise<UnrealInstanceInfo | null> {
+        const probeHost = normalizeHost(host);
         return new Promise(resolve => {
             const req = http.get(
-                `http://127.0.0.1:${port}/status`,
+                `http://${probeHost}:${port}/status`,
                 { timeout: 1000 },
                 res => {
                     if (res.statusCode !== 200) {
@@ -235,13 +271,15 @@ export class UnrealInstanceManager extends EventEmitter {
                                 return;
                             }
                     resolve({
+                        host: probeHost,
                         port,
                         wsPort: json.wsPort ?? port + 10000,
                         projectName: json.projectName ?? "",
                         engineVersion: json.engineVersion ?? "",
                         netRole: json.netRole ?? undefined,
                         toolsListMode: json.toolsListMode ?? "starter",
-                        authToken: readUeAuthToken(port),
+                        authToken: tokenOverride
+                            ?? (probeHost === LOOPBACK_HOST ? readUeAuthToken(port) : undefined),
                     });
                         } catch {
                             resolve(null);
@@ -261,25 +299,28 @@ export class UnrealInstanceManager extends EventEmitter {
      * @param setPreferred 用户手动选择时置为 true，会记录为 preferredPort；
      *                     自动发现时置 false，不覆盖用户偏好。
      */
-    async connectTo(port: number, setPreferred = false): Promise<boolean> {
+    async connectTo(port: number, setPreferred = false, host?: string): Promise<boolean> {
+        const targetHost = normalizeHost(host);
         if (setPreferred) {
             this.preferredPort = port;
+            this.preferredHost = targetHost;
             this.manuallyDisconnected = false; // 用户主动选择，恢复自动重连
         }
-        // 已连到同端口且 WS 存活：直接复用，避免 reset→重建造成连接抖动
-        if (this.connectedPort === port && this.isWsOpen()) return true;
-        const info = await this.probeStatus(port);
+        // 已连到同实例且 WS 存活：直接复用，避免 reset→重建造成连接抖动
+        if (this.connectedPort === port && this.connectedHost === targetHost && this.isWsOpen()) return true;
+        const remoteTok = this.tokenFor(targetHost, port);
+        const info = await this.probeStatus(port, targetHost, remoteTok);
         if (!info) return false;
         this.resetWsConnection(false);
 
         return new Promise<boolean>(resolve => {
-            const wsUrl = `ws://127.0.0.1:${info.wsPort}`;
+            const wsUrl = `ws://${info.host}:${info.wsPort}`;
             const socket = new WebSocket(wsUrl, { handshakeTimeout: 3000 });
             const epoch = ++this.connectionEpoch;
             let settled = false;
 
             socket.on("open", () => {
-                const token = info.authToken ?? readUeAuthToken(port);
+                const token = info.authToken ?? this.tokenFor(targetHost, port);
                 void this.authWsSocket(socket, token).then(ok => {
                     if (!ok || this.connectionEpoch !== epoch) {
                         try { socket.close(); } catch { /* ignore */ }
@@ -291,6 +332,7 @@ export class UnrealInstanceManager extends EventEmitter {
                     }
                     this.ws = socket;
                     this.connectedPort = port;
+                    this.connectedHost = targetHost;
                     this.connectedToolsListMode = info.toolsListMode ?? "starter";
                     this.attachWsKeepalive(socket);
                     this.emit("connectionChanged", port);
@@ -312,6 +354,7 @@ export class UnrealInstanceManager extends EventEmitter {
                 if (this.connectionEpoch !== epoch) return;
                 this.clearWsKeepalive();
                 this.connectedPort = -1;
+                this.connectedHost = LOOPBACK_HOST;
                 this.connectedToolsListMode = "starter";
                 // 保留 cachedToolsList：断线期间 tools/list 仍返回上次清单，
                 // tools/call 统一得到「未连接」错误，避免客户端把调用降级成 Tool not found。
@@ -354,12 +397,14 @@ export class UnrealInstanceManager extends EventEmitter {
         }
         const prev = this.connectedPort;
         this.connectedPort = -1;
+        this.connectedHost = LOOPBACK_HOST;
         this.connectedToolsListMode = "starter";
         this.cachedToolsList = null;
         this.upstreamInstructions = "";
         this.cachedProxyConfig = null;
         if (clearPreferred) {
             this.preferredPort = -1;
+            this.preferredHost = LOOPBACK_HOST;
         }
         if (prev > 0) {
             this.emit("connectionChanged", -1);
@@ -384,11 +429,16 @@ export class UnrealInstanceManager extends EventEmitter {
             : this.preferredPort > 0
                 ? this.preferredPort
                 : -1;
+        const reconnectHost = this.connectedPort > 0
+            ? this.connectedHost
+            : this.preferredPort > 0
+                ? this.preferredHost
+                : LOOPBACK_HOST;
 
         this.clearStaleConnectionState();
 
         if (reconnectPort > 0) {
-            return this.connectTo(reconnectPort, false);
+            return this.connectTo(reconnectPort, false, reconnectHost);
         }
 
         await this.discoverInstances();
@@ -527,14 +577,16 @@ export class UnrealInstanceManager extends EventEmitter {
         port: number,
         params: Record<string, unknown>,
         timeoutMs = UnrealInstanceManager.TOOLS_CALL_TIMEOUT_MS,
+        host?: string,
     ): Promise<WsRequestResult> {
         // 优先从最近扫描缓存取 wsPort，省一次 HTTP 探测
-        const cached = this.instances.find(i => i.port === port);
-        const info = cached ?? await this.probeStatus(port);
+        const cached = this.instances.find(i =>
+            i.port === port && (!host || normalizeHost(i.host) === normalizeHost(host)));
+        const info = cached ?? await this.probeStatus(port, host, this.tokenFor(host, port));
         if (!info) return { status: "disconnected" };
 
         return new Promise(resolve => {
-            const socket = new WebSocket(`ws://127.0.0.1:${info.wsPort}`, { handshakeTimeout: 3000 });
+            const socket = new WebSocket(`ws://${info.host}:${info.wsPort}`, { handshakeTimeout: 3000 });
             const id = this.idCounter++;
             let settled = false;
             const finish = (value: WsRequestResult): void => {
@@ -547,7 +599,7 @@ export class UnrealInstanceManager extends EventEmitter {
             const timer = setTimeout(() => finish({ status: "timeout" }), timeoutMs);
 
             socket.on("open", () => {
-                const token = info.authToken ?? readUeAuthToken(port);
+                const token = info.authToken ?? this.tokenFor(info.host, port);
                 void this.authWsSocket(socket, token).then(ok => {
                     if (!ok) {
                         finish({ status: "disconnected" });

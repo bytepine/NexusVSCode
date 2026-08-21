@@ -4,6 +4,8 @@
  * UE 实例信息（已加载 NexusLink，可连接）。
  */
 export interface UnrealInstanceInfo {
+    /** 默认 127.0.0.1；远程条目为显式局域网 IP。 */
+    host: string;
     port: number;
     wsPort: number;
     projectName: string;

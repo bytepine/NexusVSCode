@@ -45,6 +45,10 @@ VSCode / Cursor 端 MCP **代理**：本地 HTTP 服务器（默认 `:6900`）�
 | `nexusMcp.scanPortEnd` | `45100` | UE 扫描结束 |
 | `nexusMcp.scanIntervalSeconds` | `5` | 定时发现间隔（秒） |
 | `nexusMcp.writeGate` | `destructive` | 写门控：`off` / `destructive`（删除、重命名、停 PIE、manage 删除类 op）/ `all` |
+| `nexusMcp.listenLan` | `false` | 勾选后 MCP 绑 `0.0.0.0`，远程 AI 用本机网卡 IP 连接 |
+| `nexusMcp.remoteUnreal` | `[]` | 远程 UE：`{ host, mcpPort, authToken }`，不扫网段 |
+
+跨机步骤见 [usage-guide §1](https://github.com/bytepine/NexusLink/blob/master/docs/usage-guide.md)。
 
 ### 4. 状态栏与命令
 

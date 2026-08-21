@@ -20,13 +20,13 @@ export async function showInstancePicker(manager: UnrealInstanceManager): Promis
         });
     } else {
         for (const info of instances) {
-            const name = info.projectName || `端口 ${info.port}`;
+            const name = info.projectName || `${info.host}:${info.port}`;
             const ver = info.engineVersion ? `UE ${info.engineVersion}` : "";
-            const mark = info.port === manager.connectedPort ? "  $(check)" : "";
+            const mark = manager.isConnectedInfo(info) ? "  $(check)" : "";
             items.push({
                 label: `${name}${mark}`,
-                description: `${ver}   :${info.port}`,
-                detail: info.port === manager.connectedPort ? "当前连接" : undefined,
+                description: `${ver}   ${info.host}:${info.port}`,
+                detail: manager.isConnectedInfo(info) ? "当前连接" : undefined,
             });
         }
     }
@@ -52,38 +52,37 @@ export async function showInstancePicker(manager: UnrealInstanceManager): Promis
 
     if (selected.label.includes("未发现活跃")) return;
 
-    // 从 description 中提取端口号
-    const portMatch = selected.description?.match(/:(\d+)/);
-    if (portMatch) {
-        const port = parseInt(portMatch[1], 10);
-        if (port !== manager.connectedPort) {
-            // 用户主动选择 → 记录为 preferredPort，避免被自动发现逻辑覆盖
-            await manager.connectTo(port, true);
-        }
+    const hostPort = selected.description?.match(/(\S+):(\d+)\s*$/);
+    if (hostPort) {
+        const host = hostPort[1];
+        const port = parseInt(hostPort[2], 10);
+        const already = manager.instances.find(i => i.host === host && i.port === port);
+        if (already && manager.isConnectedInfo(already)) return;
+        await manager.connectTo(port, true, host);
     }
 }
 
-function buildStreamConfig(port: number, token: string): string {
+function buildStreamConfig(port: number, token: string, host: string): string {
     const headers = `  "headers": {\n    "Authorization": "Bearer ${token}"\n  }`;
-    return `# ── CodeBuddy / Windsurf ──────────────────────────────────\n# 配置路径：自定义 MCP → 粘贴到 mcpServers 节点下\n"Nexus": {\n  "url": "http://127.0.0.1:${port}/stream",\n  "transportType": "streamable-http",\n  "description": "NexusLink MCP Server for Unreal Engine",\n  "disabled": false,\n${headers}\n}\n\n# ── Cursor ────────────────────────────────────────────────\n# 配置路径：~/.cursor/mcp.json → mcpServers 节点下\n"nexus-unreal": {\n  "url": "http://127.0.0.1:${port}/stream",\n${headers}\n}`;
+    return `# ── CodeBuddy / Windsurf ──────────────────────────────────\n# 配置路径：自定义 MCP → 粘贴到 mcpServers 节点下\n"Nexus": {\n  "url": "http://${host}:${port}/stream",\n  "transportType": "streamable-http",\n  "description": "NexusLink MCP Server for Unreal Engine",\n  "disabled": false,\n${headers}\n}\n\n# ── Cursor ────────────────────────────────────────────────\n# 配置路径：~/.cursor/mcp.json → mcpServers 节点下\n"nexus-unreal": {\n  "url": "http://${host}:${port}/stream",\n${headers}\n}`;
 }
 
-function buildSseConfig(port: number, token: string): string {
+function buildSseConfig(port: number, token: string, host: string): string {
     const headers = `  "headers": {\n    "Authorization": "Bearer ${token}"\n  }`;
-    return `# ── CodeBuddy / Windsurf ──────────────────────────────────\n# 配置路径：自定义 MCP → 粘贴到 mcpServers 节点下\n"Nexus": {\n  "url": "http://127.0.0.1:${port}/sse",\n  "disabled": false,\n${headers}\n}\n\n# ── Cursor ────────────────────────────────────────────────\n# 配置路径：~/.cursor/mcp.json → mcpServers 节点下\n"nexus-unreal": {\n  "url": "http://127.0.0.1:${port}/sse",\n${headers}\n}`;
+    return `# ── CodeBuddy / Windsurf ──────────────────────────────────\n# 配置路径：自定义 MCP → 粘贴到 mcpServers 节点下\n"Nexus": {\n  "url": "http://${host}:${port}/sse",\n  "disabled": false,\n${headers}\n}\n\n# ── Cursor ────────────────────────────────────────────────\n# 配置路径：~/.cursor/mcp.json → mcpServers 节点下\n"nexus-unreal": {\n  "url": "http://${host}:${port}/sse",\n${headers}\n}`;
 }
 
 /**
  * 先 QuickPick 选传输协议，再将对应 MCP 客户端配置片段复制到剪贴板（与 Rider 配置面板对齐）。
  */
-export async function copyMcpConfig(port: number, token: string): Promise<void> {
+export async function copyMcpConfig(port: number, token: string, host = "127.0.0.1"): Promise<void> {
     const choice = await vscode.window.showQuickPick(
         ["Streamable HTTP（推荐）", "SSE"],
         { title: "选择 MCP 传输协议", placeHolder: "Streamable HTTP 兼容 Cursor / CodeBuddy / Windsurf" }
     );
     if (!choice) { return; }
 
-    const config = choice.startsWith("SSE") ? buildSseConfig(port, token) : buildStreamConfig(port, token);
+    const config = choice.startsWith("SSE") ? buildSseConfig(port, token, host) : buildStreamConfig(port, token, host);
     await vscode.env.clipboard.writeText(config);
     vscode.window.showInformationMessage("MCP 客户端配置已复制到剪贴板");
 }

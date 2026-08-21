@@ -79,6 +79,24 @@
           "enum": ["off", "destructive", "all"],
           "default": "destructive",
           "description": "写操作门控：off 不确认；destructive（默认）删除/重命名/停 PIE/manage 删除类 op；all 所有写操作。确认框可选允许 / 拒绝 / 本会话总是允许。"
+        },
+        "nexusMcp.listenLan": {
+          "type": "boolean",
+          "default": false,
+          "description": "MCP HTTP 绑 0.0.0.0，允许局域网 AI 客户端连接（须 Bearer；勿映射到公网）"
+        },
+        "nexusMcp.remoteUnreal": {
+          "type": "array",
+          "default": [],
+          "description": "远程 UE 显式列表（不扫网段）。每项 host + mcpPort + authToken（从 UE 设置面板复制）",
+          "items": {
+            "type": "object",
+            "properties": {
+              "host": { "type": "string", "description": "UE 机器局域网 IP" },
+              "mcpPort": { "type": "number", "description": "NexusLink MCP HTTP 端口" },
+              "authToken": { "type": "string", "description": "UE MCP Bearer token" }
+            }
+          }
         }
       }
     },

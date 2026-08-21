@@ -45,6 +45,10 @@ Then **Settings** → search `nexusMcp` → **Nexus Mcp: Enabled** = `true` (def
 | `nexusMcp.scanPortEnd` | `45100` | UE scan end |
 | `nexusMcp.scanIntervalSeconds` | `5` | Discovery interval (seconds) |
 | `nexusMcp.writeGate` | `destructive` | Write gate: `off` / `destructive` (delete, rename, stop PIE, manage delete-like ops) / `all` |
+| `nexusMcp.listenLan` | `false` | Bind MCP to `0.0.0.0` so remote AI clients can use this machine's LAN IP |
+| `nexusMcp.remoteUnreal` | `[]` | Remote UE: `{ host, mcpPort, authToken }`; no subnet scan |
+
+Cross-machine steps: [usage-guide §1](https://github.com/bytepine/NexusLink/blob/master/docs/usage-guide.md).
 
 ### 4. Status bar & commands
 

@@ -7,6 +7,14 @@
 
 ## [Unreleased]
 
+### Added
+
+- feat(mcp): `listenLan` / `remoteUnreal[]`；实例主键 `host:mcpPort`；复制 mcp.json 填局域网 IP
+
+### Security
+
+- 默认仍绑 loopback；开 LAN 后须 Bearer，勿映射公网
+
 ## [2.0.0-beta.1] - 2026-08-21
 
 > ⚠️ Pre-release，非生产环境使用。

@@ -236,18 +236,16 @@ export class NexusMcpDispatcher {
 
         // 可选 targetPort：一次性路由到指定实例，不改动长连接绑定
         const forwardParams = { ...params };
-        let targetPort = -1;
         const args = params.arguments as Record<string, unknown> | undefined;
-        if (args && typeof args.targetPort === "number" && Number.isInteger(args.targetPort) && args.targetPort >= 1024) {
-            targetPort = args.targetPort;
-            const { targetPort: _drop, ...restArgs } = args;
-            forwardParams.arguments = restArgs;
-        }
-
-        // 远端工具转发：默认长连接；仅显式 targetPort 走一次性 WS。
         let outcome: WsRequestResult;
-        if (targetPort > 0) {
-            outcome = await this.unrealManager.forwardToolCallToPort(targetPort, forwardParams);
+        if (args && typeof args.targetPort === "number" && Number.isInteger(args.targetPort) && args.targetPort >= 1024) {
+            const targetPort = args.targetPort;
+            const targetHost = typeof args.targetHost === "string" ? args.targetHost : undefined;
+            const { targetPort: _drop, targetHost: _dropHost, ...restArgs } = args;
+            forwardParams.arguments = restArgs;
+            outcome = await this.unrealManager.forwardToolCallToPort(
+                targetPort, forwardParams, UnrealInstanceManager.TOOLS_CALL_TIMEOUT_MS, targetHost,
+            );
         } else {
             await this.unrealManager.ensureLongConnection();
             outcome = await this.unrealManager.forwardToolCall(forwardParams);
@@ -305,10 +303,11 @@ export class NexusMcpDispatcher {
         const wsOpen = this.unrealManager.isWsOpen();
         const arr = instances.map(info => {
             const entry: Record<string, unknown> = {
+                host: info.host,
                 port: info.port,
                 projectName: info.projectName,
                 engineVersion: info.engineVersion,
-                connected: info.port === this.unrealManager.connectedPort && wsOpen,
+                connected: this.unrealManager.isConnectedInfo(info) && wsOpen,
             };
             if (info.netRole) entry.netRole = info.netRole;
             return entry;
@@ -321,10 +320,11 @@ export class NexusMcpDispatcher {
 
     private async handleConnect(id: unknown, params?: Record<string, unknown>): Promise<string> {
         const port = (params?.port as number) ?? -1;
+        const host = typeof params?.host === "string" ? params.host : undefined;
         if (port < 1024) {
             return makeError(id, INVALID_PARAMS, `Invalid port: ${port}`);
         }
-        const success = await this.unrealManager.connectTo(port, true);
+        const success = await this.unrealManager.connectTo(port, true, host);
         if (success) {
             // 连接成功后主动预热工具缓存并推送 tools/list_changed；
             // extension.ts 的 connectionChanged 监听不覆盖此路径（手动连接 bypass 了 discoverInstances）。

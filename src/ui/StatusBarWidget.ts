@@ -58,8 +58,8 @@ export class StatusBarWidget implements vscode.Disposable {
             return;
         }
         if (mgr.connectedPort > 0) {
-            const info = mgr.instances.find(i => i.port === mgr.connectedPort);
-            const name = info?.projectName || `${mgr.connectedPort}`;
+            const info = mgr.instances.find(i => mgr.isConnectedInfo(i));
+            const name = info?.projectName || `${mgr.connectedHost}:${mgr.connectedPort}`;
             const act = activity?.capability
                 ? ` · ${activity.capability}${activity.identity ? " " + truncate(activity.identity, 32) : ""}`
                 : "";
@@ -78,14 +78,15 @@ export class StatusBarWidget implements vscode.Disposable {
         const lines: string[] = [];
         // MCP 服务器地址行（与 Rider tooltip 对齐）
         if (this.serverPort > 0) {
-            lines.push(`MCP 服务器：http://127.0.0.1:${this.serverPort}/stream (stream) | /sse (sse)`);
+            lines.push(`MCP 服务器：http://127.0.0.1:${this.serverPort}/stream（listenLan 时请用中转机局域网 IP）`);
         } else {
             lines.push("MCP 服务器：未运行");
         }
         const port = this.manager?.connectedPort ?? -1;
         if (projectName && port > 0) {
             const ver = engineVersion ? ` · UE ${engineVersion}` : "";
-            lines.push(`已连接 UE：${projectName}${ver}（端口 ${port}）`);
+            const host = this.manager?.connectedHost ?? "127.0.0.1";
+            lines.push(`已连接 UE：${projectName}${ver}（${host}:${port}）`);
         } else {
             lines.push("UE：未连接");
         }
