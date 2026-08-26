@@ -7,6 +7,10 @@
 
 ## [Unreleased]
 
+## [2.0.0-beta.2] - 2026-08-26
+
+> ⚠️ Pre-release，非生产环境使用。
+
 ### Added
 
 - feat(mcp): `listenLan` / `remoteUnreal[]`；实例主键 `host:mcpPort`；复制 mcp.json 填局域网 IP
