@@ -7,6 +7,10 @@
 
 ## [Unreleased]
 
+## [2.0.0-beta.3] - 2026-08-27
+
+> ⚠️ Pre-release，非生产环境使用。
+
 ### Added
 
 - feat(ui): 命令「复制鉴权 Token」展示本机共享 token 并可一键复制
