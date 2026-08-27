@@ -10,6 +10,15 @@ export interface RemoteUnrealEntry {
     authToken: string;
 }
 
+export interface LanIPv4 {
+    name: string;
+    address: string;
+}
+
+function isLinkLocalIPv4(address: string): boolean {
+    return address.startsWith("169.254.");
+}
+
 /** localhost / ::1 归一为 127.0.0.1。 */
 export function normalizeHost(host?: string): string {
     const h = (host ?? LOOPBACK_HOST).trim();
@@ -47,20 +56,49 @@ export function parseRemoteUnreal(raw: unknown): RemoteUnrealEntry[] {
     return out;
 }
 
-/** 第一块非 loopback IPv4；没有则 undefined。 */
-export function firstLanIPv4(): string | undefined {
+/** 已启用、非 loopback、非 169.254 的 IPv4（含网卡名）。 */
+export function listLanIPv4(): LanIPv4[] {
+    const out: LanIPv4[] = [];
     const ifaces = os.networkInterfaces();
-    for (const addrs of Object.values(ifaces)) {
+    for (const [name, addrs] of Object.entries(ifaces)) {
         if (!addrs) {
             continue;
         }
         for (const a of addrs) {
-            if (a.family === "IPv4" && !a.internal) {
-                return a.address;
+            const family = a.family === "IPv4" || a.family === 4;
+            if (!family || a.internal || isLinkLocalIPv4(a.address)) {
+                continue;
             }
+            out.push({ name, address: a.address });
         }
     }
-    return undefined;
+    return out;
+}
+
+/** 第一块非 loopback IPv4；没有则 undefined。 */
+export function firstLanIPv4(): string | undefined {
+    return listLanIPv4()[0]?.address;
+}
+
+/**
+ * 复制 mcp.json 用的 host。
+ * 未开 LAN → 127.0.0.1；仅一块局域网 IP → 直接用；多块 → 返回候选项（含本机）供 UI 选择。
+ */
+export function copyHostChoices(listenLan: boolean): { auto: string; choices: LanIPv4[] } {
+    if (!listenLan) {
+        return { auto: LOOPBACK_HOST, choices: [] };
+    }
+    const lan = listLanIPv4();
+    if (lan.length === 0) {
+        return { auto: LOOPBACK_HOST, choices: [] };
+    }
+    if (lan.length === 1) {
+        return { auto: lan[0].address, choices: [] };
+    }
+    return {
+        auto: "",
+        choices: [{ name: "本机", address: LOOPBACK_HOST }, ...lan],
+    };
 }
 
 export function mcpDisplayHost(listenLan: boolean): string {

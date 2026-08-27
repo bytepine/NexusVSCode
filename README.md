@@ -61,7 +61,7 @@ VSCode / Cursor 端 MCP **代理**：本地 HTTP 服务器（默认 `:6900`）�
 | `Nexus MCP: 刷新 UE 实例` | 手动扫描 |
 | `Nexus MCP: 选择 UE 实例` | 弹出列表并连接 |
 | `Nexus MCP: 断开 UE 连接` | 断开当前 WebSocket |
-| `Nexus MCP: 复制 MCP 客户端配置` | 复制 AI 客户端 JSON |
+| `Nexus MCP: 复制 MCP 客户端配置` | 复制 AI 客户端 JSON；开 LAN 且多网卡时先选 IP；Bearer 仅本机 token |
 | `Nexus MCP: 复制鉴权 Token` | 展示本机共享 token，可一键复制 |
 | `Nexus MCP: 暂停 Agent 转发` | 后续远端调用在代理排队，不发往 UE |
 | `Nexus MCP: 恢复 Agent 转发` | 解除暂停 |

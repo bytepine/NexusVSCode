@@ -61,7 +61,7 @@ The status bar shows the connected project name or disconnected; click to switch
 | `Nexus MCP: Refresh UE Instances` | Manual scan |
 | `Nexus MCP: Select UE Instance` | Pick and connect |
 | `Nexus MCP: Disconnect` | Close current WebSocket |
-| `Nexus MCP: Copy MCP Client Configuration` | Copy AI client JSON |
+| `Nexus MCP: Copy MCP Client Configuration` | Copy AI client JSON; pick NIC IP when LAN has multiple addresses; Bearer is this machine's token only |
 | `Nexus MCP: Copy Auth Token` | Show the machine-shared token; copy with one click |
 | `Nexus MCP: Pause Agent Forwarding` | Queue remote calls at the proxy; do not send to UE |
 | `Nexus MCP: Resume Agent Forwarding` | Unpause |

@@ -3,7 +3,7 @@
 import * as vscode from "vscode";
 import type { UnrealInstanceManager } from "../unreal/UnrealInstanceManager";
 import { getConfig } from "../config/NexusLinkSettings";
-import { parseAuthTokens } from "../util/mcpAuth";
+import { copyHostChoices, type LanIPv4 } from "../util/lanHost";
 
 /**
  * QuickPick 实例选择器：弹出 UE 实例列表，可切换连接或手动刷新。
@@ -64,10 +64,8 @@ export async function showInstancePicker(manager: UnrealInstanceManager): Promis
 }
 
 function mcpAuthHeaders(token: string, requireAuth: boolean): string {
-    if (!requireAuth) return "";
-    const tokens = parseAuthTokens([token, ...getConfig().extraAuthTokens]);
-    if (tokens.length === 0) return "";
-    return `,\n  "headers": {\n    "Authorization": "Bearer ${tokens.join(", ")}"\n  }`;
+    if (!requireAuth || !token) return "";
+    return `,\n  "headers": {\n    "Authorization": "Bearer ${token}"\n  }`;
 }
 
 function buildStreamConfig(port: number, token: string, host: string, requireAuth: boolean): string {
@@ -81,9 +79,23 @@ function buildSseConfig(port: number, token: string, host: string, requireAuth: 
 }
 
 /**
- * 先 QuickPick 选传输协议，再将对应 MCP 客户端配置片段复制到剪贴板（与 Rider 配置面板对齐）。
+ * 开 LAN 且多网卡时先选 IP，再选传输协议，复制 MCP 客户端配置（Bearer 仅本机 token）。
  */
-export async function copyMcpConfig(port: number, token: string, host = "127.0.0.1"): Promise<void> {
+export async function copyMcpConfig(port: number, token: string): Promise<void> {
+    const { auto, choices } = copyHostChoices(getConfig().listenLan);
+    let host = auto;
+    if (choices.length > 0) {
+                const picked = await vscode.window.showQuickPick(
+            choices.map((c: LanIPv4) => ({
+                label: c.name,
+                description: c.address,
+            })),
+            { title: "选择网卡 IP", placeHolder: "写入 mcp.json 的 url 主机" },
+        );
+        if (!picked?.description) { return; }
+        host = picked.description;
+    }
+
     const choice = await vscode.window.showQuickPick(
         ["Streamable HTTP（推荐）", "SSE"],
         { title: "选择 MCP 传输协议", placeHolder: "Streamable HTTP 兼容 Cursor / CodeBuddy / Windsurf" }

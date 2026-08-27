@@ -20,6 +20,11 @@ let preferredListenLan = false;
 /** 命令只注册一次，热重启时复用（VSCode 不支持 registerCommand 同 id 重复注册）。 */
 let commandsRegistered = false;
 const PROXY_TOKEN_SECRET = "nexusMcp.proxyToken";
+let prevConfig = getConfig();
+let revertingLanAuth = false;
+
+const LAN_AUTH_WARN =
+    "局域网可达且未鉴权时，同网段主机都能控制编辑器。确定继续？不要做公网映射。";
 
 async function getOrCreateProxyToken(context: vscode.ExtensionContext): Promise<string> {
     const seeded = await context.secrets.get(PROXY_TOKEN_SECRET);
@@ -42,6 +47,32 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     // 配置变更监听：放在 enabled 判断之外，确保用户后续开关能热生效
     context.subscriptions.push(
         onConfigChanged(async newConfig => {
+            if (revertingLanAuth) {
+                revertingLanAuth = false;
+                prevConfig = newConfig;
+            } else {
+                const wasDanger = prevConfig.listenLan && !prevConfig.requireAuth;
+                const nowDanger = newConfig.listenLan && !newConfig.requireAuth;
+                if (nowDanger && !wasDanger) {
+                    const pick = await vscode.window.showWarningMessage(
+                        LAN_AUTH_WARN,
+                        { modal: true },
+                        "继续",
+                    );
+                    if (pick !== "继续") {
+                        revertingLanAuth = true;
+                        const cfg = vscode.workspace.getConfiguration("nexusMcp");
+                        if (newConfig.listenLan !== prevConfig.listenLan) {
+                            await cfg.update("listenLan", prevConfig.listenLan, vscode.ConfigurationTarget.Global);
+                        }
+                        if (newConfig.requireAuth !== prevConfig.requireAuth) {
+                            await cfg.update("requireAuth", prevConfig.requireAuth, vscode.ConfigurationTarget.Global);
+                        }
+                        return;
+                    }
+                }
+                prevConfig = newConfig;
+            }
             if (!newConfig.enabled) {
                 await stopAll();
                 return;
@@ -181,10 +212,9 @@ async function startAll(
             }),
             vscode.commands.registerCommand("nexus.copyMcpConfig", () => {
                 if (httpServer?.isRunning) {
-                    copyMcpConfig(
+                    void copyMcpConfig(
                         httpServer.port,
                         httpServer.getProxyToken(),
-                        mcpDisplayHost(preferredListenLan),
                     );
                 }
             }),
