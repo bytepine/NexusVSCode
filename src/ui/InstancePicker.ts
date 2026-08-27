@@ -2,7 +2,8 @@
 
 import * as vscode from "vscode";
 import type { UnrealInstanceManager } from "../unreal/UnrealInstanceManager";
-import type { UnrealInstanceInfo } from "../unreal/types";
+import { getConfig } from "../config/NexusLinkSettings";
+import { parseAuthTokens } from "../util/mcpAuth";
 
 /**
  * QuickPick 实例选择器：弹出 UE 实例列表，可切换连接或手动刷新。
@@ -62,14 +63,21 @@ export async function showInstancePicker(manager: UnrealInstanceManager): Promis
     }
 }
 
-function buildStreamConfig(port: number, token: string, host: string): string {
-    const headers = `  "headers": {\n    "Authorization": "Bearer ${token}"\n  }`;
-    return `# ── CodeBuddy / Windsurf ──────────────────────────────────\n# 配置路径：自定义 MCP → 粘贴到 mcpServers 节点下\n"Nexus": {\n  "url": "http://${host}:${port}/stream",\n  "transportType": "streamable-http",\n  "description": "NexusLink MCP Server for Unreal Engine",\n  "disabled": false,\n${headers}\n}\n\n# ── Cursor ────────────────────────────────────────────────\n# 配置路径：~/.cursor/mcp.json → mcpServers 节点下\n"nexus-unreal": {\n  "url": "http://${host}:${port}/stream",\n${headers}\n}`;
+function mcpAuthHeaders(token: string, requireAuth: boolean): string {
+    if (!requireAuth) return "";
+    const tokens = parseAuthTokens([token, ...getConfig().extraAuthTokens]);
+    if (tokens.length === 0) return "";
+    return `,\n  "headers": {\n    "Authorization": "Bearer ${tokens.join(", ")}"\n  }`;
 }
 
-function buildSseConfig(port: number, token: string, host: string): string {
-    const headers = `  "headers": {\n    "Authorization": "Bearer ${token}"\n  }`;
-    return `# ── CodeBuddy / Windsurf ──────────────────────────────────\n# 配置路径：自定义 MCP → 粘贴到 mcpServers 节点下\n"Nexus": {\n  "url": "http://${host}:${port}/sse",\n  "disabled": false,\n${headers}\n}\n\n# ── Cursor ────────────────────────────────────────────────\n# 配置路径：~/.cursor/mcp.json → mcpServers 节点下\n"nexus-unreal": {\n  "url": "http://${host}:${port}/sse",\n${headers}\n}`;
+function buildStreamConfig(port: number, token: string, host: string, requireAuth: boolean): string {
+    const headers = mcpAuthHeaders(token, requireAuth);
+    return `# ── CodeBuddy / Windsurf ──────────────────────────────────\n# 配置路径：自定义 MCP → 粘贴到 mcpServers 节点下\n"Nexus": {\n  "url": "http://${host}:${port}/stream",\n  "transportType": "streamable-http",\n  "description": "NexusLink MCP Server for Unreal Engine",\n  "disabled": false${headers}\n}\n\n# ── Cursor ────────────────────────────────────────────────\n# 配置路径：~/.cursor/mcp.json → mcpServers 节点下\n"nexus-unreal": {\n  "url": "http://${host}:${port}/stream"${headers}\n}`;
+}
+
+function buildSseConfig(port: number, token: string, host: string, requireAuth: boolean): string {
+    const headers = mcpAuthHeaders(token, requireAuth);
+    return `# ── CodeBuddy / Windsurf ──────────────────────────────────\n# 配置路径：自定义 MCP → 粘贴到 mcpServers 节点下\n"Nexus": {\n  "url": "http://${host}:${port}/sse",\n  "disabled": false${headers}\n}\n\n# ── Cursor ────────────────────────────────────────────────\n# 配置路径：~/.cursor/mcp.json → mcpServers 节点下\n"nexus-unreal": {\n  "url": "http://${host}:${port}/sse"${headers}\n}`;
 }
 
 /**
@@ -82,7 +90,28 @@ export async function copyMcpConfig(port: number, token: string, host = "127.0.0
     );
     if (!choice) { return; }
 
-    const config = choice.startsWith("SSE") ? buildSseConfig(port, token, host) : buildStreamConfig(port, token, host);
+    const requireAuth = getConfig().requireAuth;
+    const config = choice.startsWith("SSE")
+        ? buildSseConfig(port, token, host, requireAuth)
+        : buildStreamConfig(port, token, host, requireAuth);
     await vscode.env.clipboard.writeText(config);
     vscode.window.showInformationMessage("MCP 客户端配置已复制到剪贴板");
+}
+
+/**
+ * 展示本机共享鉴权 token，可选一键复制（仅 token，不含 mcp.json）。
+ */
+export async function showAndCopyAuthToken(token: string): Promise<void> {
+    if (!token) {
+        vscode.window.showWarningMessage("本机鉴权 Token 尚未生成");
+        return;
+    }
+    const pick = await vscode.window.showInformationMessage(
+        `本机鉴权 Token：${token}`,
+        { modal: true },
+        "复制",
+    );
+    if (pick === "复制") {
+        await vscode.env.clipboard.writeText(token);
+    }
 }

@@ -29,6 +29,7 @@ Install `nexus-mcp-unreal-*.zip` into your project's `Plugins/Developer/NexusLin
 - **Nexus MCP: Select UE Instance**
 - **Nexus MCP: Disconnect**
 - **Nexus MCP: Copy MCP Client Configuration**
+- **Nexus MCP: Copy Auth Token**
 
 Source & docs: [github.com/bytepine/NexusVSCode](https://github.com/bytepine/NexusVSCode). All network traffic is bound to `127.0.0.1`; no telemetry is collected.
 
@@ -63,5 +64,6 @@ Source & docs: [github.com/bytepine/NexusVSCode](https://github.com/bytepine/Nex
 - **Nexus MCP: 选择 UE 实例**
 - **Nexus MCP: 断开 UE 连接**
 - **Nexus MCP: 复制 MCP 客户端配置**
+- **Nexus MCP: 复制鉴权 Token**
 
 源码与文档：[github.com/bytepine/NexusVSCode](https://github.com/bytepine/NexusVSCode)。所有网络通信均绑定 `127.0.0.1`，不采集任何遥测数据。

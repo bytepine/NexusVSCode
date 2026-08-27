@@ -83,18 +83,29 @@
         "nexusMcp.listenLan": {
           "type": "boolean",
           "default": false,
-          "description": "MCP HTTP 绑 0.0.0.0，允许局域网 AI 客户端连接（须 Bearer；勿映射到公网）"
+          "description": "MCP HTTP 绑 0.0.0.0，允许局域网 AI 客户端连接（默认须 Bearer，可关鉴权；勿映射到公网）"
+        },
+        "nexusMcp.requireAuth": {
+          "type": "boolean",
+          "default": true,
+          "description": "AI 连接本代理是否校验 Bearer。默认开；关闭后与旧版代理相同（无需 Authorization）。连 UE 仍按对方 /status.authRequired"
+        },
+        "nexusMcp.extraAuthTokens": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": [],
+          "description": "额外鉴权 token（其他机器，每项一个或逗号分隔）。AI Bearer 命中任一项即可；连远程 UE 时也可作候选。本机 UE 自动读 mcp-auth-token，无需填写"
         },
         "nexusMcp.remoteUnreal": {
           "type": "array",
           "default": [],
-          "description": "远程 UE 显式列表（不扫网段）。每项 host + mcpPort + authToken（从 UE 设置面板复制）",
+          "description": "远程 UE 显式列表（不扫网段）。每项 host + mcpPort；authToken 可选（可逗号分隔多个）。本机 UE 无需配置",
           "items": {
             "type": "object",
             "properties": {
               "host": { "type": "string", "description": "UE 机器局域网 IP" },
               "mcpPort": { "type": "number", "description": "NexusLink MCP HTTP 端口" },
-              "authToken": { "type": "string", "description": "UE MCP Bearer token" }
+              "authToken": { "type": "string", "description": "该 UE 的 token，可逗号分隔多个；留空则用 extraAuthTokens" }
             }
           }
         }
@@ -116,6 +127,10 @@
       {
         "command": "nexus.copyMcpConfig",
         "title": "Nexus MCP: 复制 MCP 客户端配置"
+      },
+      {
+        "command": "nexus.copyAuthToken",
+        "title": "Nexus MCP: 复制鉴权 Token"
       },
       {
         "command": "nexus.pauseAgent",

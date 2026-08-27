@@ -1,14 +1,14 @@
 // Copyright byteyang. All Rights Reserved.
 
 import * as vscode from "vscode";
-import * as crypto from "crypto";
 import { UnrealInstanceManager } from "./unreal/UnrealInstanceManager";
 import { NexusMcpHttpServer, findAvailablePort } from "./mcp/NexusMcpServer";
 import { StatusBarWidget } from "./ui/StatusBarWidget";
-import { showInstancePicker, copyMcpConfig } from "./ui/InstancePicker";
+import { showInstancePicker, copyMcpConfig, showAndCopyAuthToken } from "./ui/InstancePicker";
 import { getConfig, onConfigChanged } from "./config/NexusLinkSettings";
 import { logger } from "./util/logger";
 import { mcpDisplayHost } from "./util/lanHost";
+import { loadOrCreateMachineToken } from "./util/mcpAuth";
 
 let manager: UnrealInstanceManager | null = null;
 let httpServer: NexusMcpHttpServer | null = null;
@@ -22,16 +22,18 @@ let commandsRegistered = false;
 const PROXY_TOKEN_SECRET = "nexusMcp.proxyToken";
 
 async function getOrCreateProxyToken(context: vscode.ExtensionContext): Promise<string> {
-    let token = await context.secrets.get(PROXY_TOKEN_SECRET);
-    if (!token) {
-        token = crypto.randomBytes(32).toString("hex");
-        await context.secrets.store(PROXY_TOKEN_SECRET, token);
-    }
-    return token;
+    const seeded = await context.secrets.get(PROXY_TOKEN_SECRET);
+    return loadOrCreateMachineToken(seeded);
 }
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
     logger.init(context);
+    context.subscriptions.push(
+        vscode.commands.registerCommand("nexus.copyAuthToken", async () => {
+            const token = await getOrCreateProxyToken(context);
+            await showAndCopyAuthToken(token);
+        }),
+    );
     const config = getConfig();
     if (config.enabled) {
         await startAll(context, config);

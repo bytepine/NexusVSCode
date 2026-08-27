@@ -16,6 +16,8 @@ export interface UnrealInstanceInfo {
     toolsListMode?: string;
     /** 实例注册文件中的鉴权 token；探活后再读，不来自 /status。 */
     authToken?: string;
+    /** /status.authRequired；旧版 NexusLink 无此字段，视为不要求 WS auth。 */
+    authRequired?: boolean;
 }
 
 /**

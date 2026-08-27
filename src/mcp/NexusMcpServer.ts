@@ -9,8 +9,9 @@ import {
     extractBearerToken,
     hasBrowserOrigin,
     MAX_MCP_BODY_BYTES,
-    tokensEqual,
+    isTokenAccepted,
 } from "../util/mcpAuth";
+import { getConfig } from "../config/NexusLinkSettings";
 
 const MCP_SESSION_HEADER = "mcp-session-id";
 
@@ -66,10 +67,13 @@ export class NexusMcpHttpServer {
                 return;
             }
 
-            if (!tokensEqual(extractBearerToken(req), this.proxyToken) || !this.proxyToken) {
-                res.writeHead(401, { "Content-Type": "application/json" });
-                res.end(JSON.stringify({ error: "Missing or invalid Authorization: Bearer token" }));
-                return;
+            if (getConfig().requireAuth) {
+                const cfg = getConfig();
+                if (!isTokenAccepted(extractBearerToken(req), this.proxyToken, cfg.extraAuthTokens)) {
+                    res.writeHead(401, { "Content-Type": "application/json" });
+                    res.end(JSON.stringify({ error: "Missing or invalid Authorization: Bearer token" }));
+                    return;
+                }
             }
 
             if (path === "/stream" && method === "POST") {

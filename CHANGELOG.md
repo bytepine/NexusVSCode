@@ -7,6 +7,14 @@
 
 ## [Unreleased]
 
+### Added
+
+- feat(ui): 命令「复制鉴权 Token」展示本机共享 token 并可一键复制
+
+### Changed
+
+- feat(mcp): 鉴权 token 改为本机唯一，与 UE / Desktop / Rider 共用 `NexusLink/mcp-auth-token`；新增 `nexusMcp.requireAuth`（默认开）；`extraAuthTokens` 与 Bearer 逗号分隔支持多 token；连本机 UE 自动读 token 文件，无需 remoteUnreal；README 鉴权说明指向 usage-guide §1.1
+
 ## [2.0.0-beta.2] - 2026-08-26
 
 > ⚠️ Pre-release，非生产环境使用。

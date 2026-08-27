@@ -46,9 +46,11 @@ VSCode / Cursor 端 MCP **代理**：本地 HTTP 服务器（默认 `:6900`）�
 | `nexusMcp.scanIntervalSeconds` | `5` | 定时发现间隔（秒） |
 | `nexusMcp.writeGate` | `destructive` | 写门控：`off` / `destructive`（删除、重命名、停 PIE、manage 删除类 op）/ `all` |
 | `nexusMcp.listenLan` | `false` | 勾选后 MCP 绑 `0.0.0.0`，远程 AI 用本机网卡 IP 连接 |
-| `nexusMcp.remoteUnreal` | `[]` | 远程 UE：`{ host, mcpPort, authToken }`，不扫网段 |
+| `nexusMcp.requireAuth` | `true` | AI 连本代理是否校验 Bearer；关闭后与旧版相同 |
+| `nexusMcp.extraAuthTokens` | `[]` | 其他机器 token；本机 UE 无需填 |
+| `nexusMcp.remoteUnreal` | `[]` | 远程 UE：`{ host, mcpPort, authToken? }`，不扫网段 |
 
-跨机步骤见 [usage-guide §1](https://github.com/bytepine/NexusLink/blob/master/docs/usage-guide.md)。
+跨机与鉴权（开关、多 token、本机自动读文件）见 [usage-guide §1](https://github.com/bytepine/NexusLink/blob/master/docs/usage-guide.md)。
 
 ### 4. 状态栏与命令
 
@@ -60,6 +62,7 @@ VSCode / Cursor 端 MCP **代理**：本地 HTTP 服务器（默认 `:6900`）�
 | `Nexus MCP: 选择 UE 实例` | 弹出列表并连接 |
 | `Nexus MCP: 断开 UE 连接` | 断开当前 WebSocket |
 | `Nexus MCP: 复制 MCP 客户端配置` | 复制 AI 客户端 JSON |
+| `Nexus MCP: 复制鉴权 Token` | 展示本机共享 token，可一键复制 |
 | `Nexus MCP: 暂停 Agent 转发` | 后续远端调用在代理排队，不发往 UE |
 | `Nexus MCP: 恢复 Agent 转发` | 解除暂停 |
 
@@ -71,7 +74,7 @@ VSCode / Cursor 端 MCP **代理**：本地 HTTP 服务器（默认 `:6900`）�
 
 须先 `nexusMcp.enabled = true`。默认 `http://127.0.0.1:6900/stream`。端口顺延时以启动通知为准。
 
-**Cursor**（`~/.cursor/mcp.json`）。Token 从命令面板「复制 MCP 配置」取得：
+**Cursor**（`~/.cursor/mcp.json`）。Token 用命令面板「复制鉴权 Token」或「复制 MCP 配置」。可写多个：`Bearer <tok1>, <tok2>`。关闭 `nexusMcp.requireAuth` 时可不带 `headers`。规则见 [usage-guide §1.1](https://github.com/bytepine/NexusLink/blob/master/docs/usage-guide.md#11-鉴权)。
 
 ```json
 {

@@ -6,7 +6,8 @@ import { EventEmitter } from "events";
 import type { UnrealInstanceInfo } from "./types";
 import { DEFAULT_PROXY_CONFIG, parseProxyConfig, type ProxyConfig } from "./proxyConfig";
 import { logger } from "../util/logger";
-import { readUeAuthToken } from "../util/mcpAuth";
+import { readUeAuthToken, readMachineAuthToken, parseAuthTokens } from "../util/mcpAuth";
+import { getConfig } from "../config/NexusLinkSettings";
 import {
     LOOPBACK_HOST,
     instanceKey,
@@ -225,12 +226,23 @@ export class UnrealInstanceManager extends EventEmitter {
             && instanceKey(info.host, info.port) === instanceKey(this.connectedHost, this.connectedPort);
     }
 
-    private tokenFor(host: string | undefined, port: number): string | undefined {
+    private tokensFor(host: string | undefined, port: number): string[] {
         const h = normalizeHost(host);
         if (h === LOOPBACK_HOST) {
-            return readUeAuthToken(port);
+            return parseAuthTokens([
+                readUeAuthToken(port) ?? "",
+                readMachineAuthToken() ?? "",
+            ]);
         }
-        return this.remoteUnreal.find(r => r.host === h && r.mcpPort === port)?.authToken;
+        const entry = this.remoteUnreal.find(r => r.host === h && r.mcpPort === port);
+        return parseAuthTokens([
+            entry?.authToken ?? "",
+            ...getConfig().extraAuthTokens,
+        ]);
+    }
+
+    private tokenFor(host: string | undefined, port: number): string | undefined {
+        return this.tokensFor(host, port)[0];
     }
 
     /** 通过 GET /status 探测 UE 实例。 */
@@ -280,6 +292,7 @@ export class UnrealInstanceManager extends EventEmitter {
                         toolsListMode: json.toolsListMode ?? "starter",
                         authToken: tokenOverride
                             ?? (probeHost === LOOPBACK_HOST ? readUeAuthToken(port) : undefined),
+                        authRequired: json.authRequired === true,
                     });
                         } catch {
                             resolve(null);
@@ -320,8 +333,7 @@ export class UnrealInstanceManager extends EventEmitter {
             let settled = false;
 
             socket.on("open", () => {
-                const token = info.authToken ?? this.tokenFor(targetHost, port);
-                void this.authWsSocket(socket, token).then(ok => {
+                void this.ensureWsAuth(socket, info.authRequired === true, this.tokensFor(targetHost, port)).then(ok => {
                     if (!ok || this.connectionEpoch !== epoch) {
                         try { socket.close(); } catch { /* ignore */ }
                         if (!settled) {
@@ -599,8 +611,7 @@ export class UnrealInstanceManager extends EventEmitter {
             const timer = setTimeout(() => finish({ status: "timeout" }), timeoutMs);
 
             socket.on("open", () => {
-                const token = info.authToken ?? this.tokenFor(info.host, port);
-                void this.authWsSocket(socket, token).then(ok => {
+                void this.ensureWsAuth(socket, info.authRequired === true, this.tokensFor(info.host, port)).then(ok => {
                     if (!ok) {
                         finish({ status: "disconnected" });
                         return;
@@ -673,6 +684,22 @@ export class UnrealInstanceManager extends EventEmitter {
                 resolve({ status: "disconnected" });
             }
         });
+    }
+
+    /**
+     * 新版 UE（authRequired）须 WS 首帧 auth；按候选 token 依次尝试。
+     * 本机优先读注册表与 mcp-auth-token 文件；远程用条目 token + extraAuthTokens。
+     */
+    private async ensureWsAuth(socket: WebSocket, authRequired: boolean, tokens: string[]): Promise<boolean> {
+        if (!authRequired) return true;
+        if (tokens.length === 0) {
+            logger.warn("未找到 UE authToken（本机 mcp-auth-token / 实例注册 / extraAuthTokens），拒绝连接");
+            return false;
+        }
+        for (const token of tokens) {
+            if (await this.authWsSocket(socket, token)) return true;
+        }
+        return false;
     }
 
     /** WS 首帧 auth；失败则不得转发 tools/call。 */

@@ -42,9 +42,6 @@ export function parseRemoteUnreal(raw: unknown): RemoteUnrealEntry[] {
         if (!Number.isInteger(mcpPort) || mcpPort < 1024 || mcpPort > 65535) {
             continue;
         }
-        if (!authToken) {
-            continue;
-        }
         out.push({ host, mcpPort, authToken });
     }
     return out;

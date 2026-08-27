@@ -46,9 +46,11 @@ Then **Settings** → search `nexusMcp` → **Nexus Mcp: Enabled** = `true` (def
 | `nexusMcp.scanIntervalSeconds` | `5` | Discovery interval (seconds) |
 | `nexusMcp.writeGate` | `destructive` | Write gate: `off` / `destructive` (delete, rename, stop PIE, manage delete-like ops) / `all` |
 | `nexusMcp.listenLan` | `false` | Bind MCP to `0.0.0.0` so remote AI clients can use this machine's LAN IP |
-| `nexusMcp.remoteUnreal` | `[]` | Remote UE: `{ host, mcpPort, authToken }`; no subnet scan |
+| `nexusMcp.requireAuth` | `true` | Require Bearer from AI clients; off matches legacy proxy |
+| `nexusMcp.extraAuthTokens` | `[]` | Tokens from other machines; not needed for local UE |
+| `nexusMcp.remoteUnreal` | `[]` | Remote UE: `{ host, mcpPort, authToken? }`; no subnet scan |
 
-Cross-machine steps: [usage-guide §1](https://github.com/bytepine/NexusLink/blob/master/docs/usage-guide.md).
+Cross-machine and auth (switches, extra tokens, local file): [usage-guide §1](https://github.com/bytepine/NexusLink/blob/master/docs/usage-guide.md).
 
 ### 4. Status bar & commands
 
@@ -60,6 +62,7 @@ The status bar shows the connected project name or disconnected; click to switch
 | `Nexus MCP: Select UE Instance` | Pick and connect |
 | `Nexus MCP: Disconnect` | Close current WebSocket |
 | `Nexus MCP: Copy MCP Client Configuration` | Copy AI client JSON |
+| `Nexus MCP: Copy Auth Token` | Show the machine-shared token; copy with one click |
 | `Nexus MCP: Pause Agent Forwarding` | Queue remote calls at the proxy; do not send to UE |
 | `Nexus MCP: Resume Agent Forwarding` | Unpause |
 
@@ -71,7 +74,7 @@ A single instance auto-connects; multiple instances prefer `netRole=Editor`. Too
 
 Set `nexusMcp.enabled = true` first. Default `http://127.0.0.1:6900/stream`. On collision, use the startup notice.
 
-**Cursor** (`~/.cursor/mcp.json`). Copy the snippet (including token) from the command palette:
+**Cursor** (`~/.cursor/mcp.json`). Copy the token from **Copy Auth Token** or **Copy MCP Client Configuration**. Multiple tokens: `Bearer <tok1>, <tok2>`. If `nexusMcp.requireAuth` is off, omit `headers`. See [usage-guide §1.1](https://github.com/bytepine/NexusLink/blob/master/docs/usage-guide.md#11-鉴权).
 
 ```json
 {

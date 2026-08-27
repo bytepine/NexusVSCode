@@ -7,6 +7,7 @@ import * as vscode from "vscode";
  */
 import { parseWriteGate, type WriteGateMode } from "../proxy/sessionPolicy";
 import { parseRemoteUnreal, type RemoteUnrealEntry } from "../util/lanHost";
+import { parseAuthTokens } from "../util/mcpAuth";
 
 export interface NexusLinkConfig {
     enabled: boolean;
@@ -16,6 +17,8 @@ export interface NexusLinkConfig {
     scanIntervalSeconds: number;
     writeGate: WriteGateMode;
     listenLan: boolean;
+    requireAuth: boolean;
+    extraAuthTokens: string[];
     remoteUnreal: RemoteUnrealEntry[];
 }
 
@@ -32,6 +35,8 @@ export function getConfig(): NexusLinkConfig {
         scanIntervalSeconds: cfg.get<number>("scanIntervalSeconds", 5),
         writeGate: parseWriteGate(cfg.get<string>("writeGate", "destructive")),
         listenLan: cfg.get<boolean>("listenLan", false),
+        requireAuth: cfg.get<boolean>("requireAuth", true),
+        extraAuthTokens: parseAuthTokens(cfg.get<string[]>("extraAuthTokens") ?? []),
         remoteUnreal: parseRemoteUnreal(cfg.get("remoteUnreal")),
     };
 }
