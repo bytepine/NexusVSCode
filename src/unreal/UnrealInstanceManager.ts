@@ -604,6 +604,7 @@ export class UnrealInstanceManager extends EventEmitter {
             const finish = (value: WsRequestResult): void => {
                 if (settled) return;
                 settled = true;
+                clearTimeout(timer);
                 try { socket.close(); } catch { /* ignore */ }
                 resolve(value);
             };
@@ -623,12 +624,11 @@ export class UnrealInstanceManager extends EventEmitter {
                 try {
                     const json = JSON.parse(rawDataToUtf8(data)) as Record<string, unknown>;
                     if (json.id !== id) return;
-                    clearTimeout(timer);
                     finish({ status: "ok", response: json });
                 } catch { /* ignore parse errors */ }
             });
-            socket.on("error", () => { clearTimeout(timer); finish({ status: "disconnected" }); });
-            socket.on("close", () => { clearTimeout(timer); finish({ status: "disconnected" }); });
+            socket.on("error", () => finish({ status: "disconnected" }));
+            socket.on("close", () => finish({ status: "disconnected" }));
         });
     }
 

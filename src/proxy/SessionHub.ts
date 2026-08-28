@@ -112,10 +112,13 @@ export class SessionHub extends EventEmitter {
         if (!needsGate(this.writeGate, info.capability, info.innerArgs)) return "allow";
         if (this.alwaysAllow.has(info.capability)) return "allow";
         if (!this.gatePrompter) return "allow";
-        const timer = new Promise<GateDecision>(resolve =>
-            setTimeout(() => resolve("deny"), GATE_TIMEOUT_MS)
-        );
-        const decision = await Promise.race([this.gatePrompter(info), timer]);
+        // 用户先做出选择时必须清掉定时器，否则挂起的 timer 会拖住扩展宿主退出
+        let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
+        const timer = new Promise<GateDecision>(resolve => {
+            timeoutHandle = setTimeout(() => resolve("deny"), GATE_TIMEOUT_MS);
+        });
+        const decision = await Promise.race([this.gatePrompter(info), timer])
+            .finally(() => clearTimeout(timeoutHandle));
         if (decision === "always") {
             this.alwaysAllow.add(info.capability);
             return "allow";
@@ -182,14 +185,8 @@ export class SessionHub extends EventEmitter {
                 return { result: structuredCloneSafe(e.result), kind: "section_hit", snapshotAt: e.snapshotAtIso };
             }
         }
-        if (allowExpired && info.identity) {
-            for (const e of this.cache.values()) {
-                if (e.identityKey !== info.identityKey) continue;
-                if (!isDurableRead(e.capability) && !allowExpired) continue;
-                this.touch(e);
-                return { result: structuredCloneSafe(e.result), kind: "hit", snapshotAt: e.snapshotAtIso };
-            }
-        }
+        // 降级时不再拿「同 identity 但不同 capability」的旧结果顶替：
+        // 那会把 A 能力的响应当成 B 能力的答案返回，模型无从分辨
         return null;
     }
 

@@ -7,51 +7,29 @@
 
 ## [Unreleased]
 
-## [2.0.0-beta.3] - 2026-08-27
-
-> ⚠️ Pre-release，非生产环境使用。
-
-### Added
-
-- feat(ui): 命令「复制鉴权 Token」展示本机共享 token 并可一键复制
-
-### Changed
-
-- feat(mcp): 鉴权 token 改为本机唯一，与 UE / Desktop / Rider 共用 `NexusLink/mcp-auth-token`；新增 `nexusMcp.requireAuth`（默认开）；`extraAuthTokens` 与 Bearer 逗号分隔支持多 token；连本机 UE 自动读 token 文件，无需 remoteUnreal；复制 MCP 配置时多网卡可选 IP，Bearer 仅本机 token；LAN 且关鉴权时确认；README 鉴权说明指向 usage-guide §1.1
-
-## [2.0.0-beta.2] - 2026-08-26
-
-> ⚠️ Pre-release，非生产环境使用。
-
-### Added
-
-- feat(mcp): `listenLan` / `remoteUnreal[]`；实例主键 `host:mcpPort`；复制 mcp.json 填局域网 IP
-
-### Security
-
-- 默认仍绑 loopback；开 LAN 后须 Bearer，勿映射公网
-
-## [2.0.0-beta.1] - 2026-08-21
-
-> ⚠️ Pre-release，非生产环境使用。
-
 ### Added
 
 - feat(mcp): 代理会话层——消费 UE `_ttl_seconds`/`_snapshotAt` 做读缓存与 30s section 短路；UE 不可达时对耐久读返回 `degraded: unavailable` 快照；`nexusMcp.writeGate`（off / destructive / all）确认破坏性写；命令「暂停/恢复 Agent 转发」；状态栏显示最近调用；超大响应落盘 `nexus-mcp-offload/`
+- feat(mcp): `listenLan` / `remoteUnreal[]`；实例主键 `host:mcpPort`；复制 mcp.json 填局域网 IP
+- feat(ui): 命令「复制鉴权 Token」展示本机共享 token 并可一键复制
 
 ### Changed
 
 - perf(mcp): `handleInitialize` 的连接状态文案改为固定句（以 tools/list 为准），避免随 WS 通断打穿 `cache_control: ephemeral`
 - docs: README 改为本产品落地页（安装/设置/FAQ）；全家桶端口与开关矩阵改链 NexusLink `docs/usage-guide.md`
+- feat(mcp): 鉴权 token 改为本机唯一，与 UE / Desktop / Rider 共用 `NexusLink/mcp-auth-token`；新增 `nexusMcp.requireAuth`（默认开）；`extraAuthTokens` 与 Bearer 逗号分隔支持多 token；连本机 UE 自动读 token 文件，无需 remoteUnreal；复制 MCP 配置时多网卡可选 IP，Bearer 仅本机 token；LAN 且关鉴权时确认；README 鉴权说明指向 usage-guide §1.1
+
+### Fixed
+
+- fix(mcp): 修改 `nexusMcp.httpPort` 后立即重启 HTTP 监听，无需重载窗口
+- fix(proxy): 写门控确认框在用户先做出选择后清掉超时定时器；一次性 WS 请求在所有结束路径都清定时器，避免挂起的 timer 拖住扩展宿主退出
+- fix(proxy): UE 不可达降级取快照时不再回退到「同 identity 但不同 capability」的旧结果，避免把 A 能力的响应当成 B 能力的答案返回；只命中同能力同参数或 section 覆盖的缓存
 
 ### Security
 
 - MCP `/stream` 须 Bearer 且拒绝 Origin；去掉 CORS `*`；body 上限 1MB
 - 连 UE 时读实例注册表 token，WebSocket 首帧 `auth`
-
-### Fixed
-
-- fix(mcp): 修改 `nexusMcp.httpPort` 后立即重启 HTTP 监听，无需重载窗口
+- 默认仍绑 loopback；开 LAN 后须 Bearer，勿映射公网
 
 ## [1.4.3] - 2026-07-17
 
