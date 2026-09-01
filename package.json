@@ -38,7 +38,7 @@
         "nexusMcp.enabled": {
           "type": "boolean",
           "default": false,
-          "description": "启用 Nexus MCP 代理服务器"
+          "description": "启用 Nexus MCP 代理服务器。可用命令「Nexus MCP: 复制 MCP 客户端配置」生成 Cursor mcp.json 等片段。"
         },
         "nexusMcp.httpPort": {
           "type": "number",

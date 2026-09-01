@@ -38,6 +38,38 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             const token = await getOrCreateProxyToken(context);
             await showAndCopyAuthToken(token);
         }),
+        vscode.commands.registerCommand("nexus.copyMcpConfig", async () => {
+            const token = await getOrCreateProxyToken(context);
+            const port = httpServer?.isRunning ? httpServer.port : getConfig().httpPort;
+            await copyMcpConfig(port, token);
+        }),
+        vscode.commands.registerCommand("nexus.selectInstance", async () => {
+            if (manager) {
+                await showInstancePicker(manager);
+            } else {
+                const pick = await vscode.window.showQuickPick(
+                    [
+                        {
+                            label: "$(copy) 复制 MCP 客户端配置",
+                            description: "Cursor mcp.json / CodeBuddy / Windsurf",
+                        },
+                        {
+                            label: "$(key) 复制鉴权 Token",
+                        },
+                    ],
+                    {
+                        title: "Nexus MCP 已停用",
+                        placeHolder: "请先在设置中启用 nexusMcp.enabled",
+                    },
+                );
+                if (pick?.label.includes("MCP 客户端配置")) {
+                    await vscode.commands.executeCommand("nexus.copyMcpConfig");
+                } else if (pick?.label.includes("鉴权 Token")) {
+                    await vscode.commands.executeCommand("nexus.copyAuthToken");
+                }
+            }
+            statusBar?.refresh();
+        }),
     );
     const config = getConfig();
     if (config.enabled) {
@@ -202,21 +234,9 @@ async function startAll(
                 await manager?.discoverInstances();
                 statusBar?.refresh();
             }),
-            vscode.commands.registerCommand("nexus.selectInstance", async () => {
-                if (manager) await showInstancePicker(manager);
-                statusBar?.refresh();
-            }),
             vscode.commands.registerCommand("nexus.disconnect", () => {
                 manager?.disconnect();
                 statusBar?.refresh();
-            }),
-            vscode.commands.registerCommand("nexus.copyMcpConfig", () => {
-                if (httpServer?.isRunning) {
-                    void copyMcpConfig(
-                        httpServer.port,
-                        httpServer.getProxyToken(),
-                    );
-                }
             }),
             vscode.commands.registerCommand("nexus.pauseAgent", () => {
                 manager?.sessionHub.setPaused(true);

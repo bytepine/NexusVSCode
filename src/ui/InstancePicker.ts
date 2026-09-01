@@ -6,7 +6,7 @@ import { getConfig } from "../config/NexusLinkSettings";
 import { copyHostChoices, type LanIPv4 } from "../util/lanHost";
 
 /**
- * QuickPick 实例选择器：弹出 UE 实例列表，可切换连接或手动刷新。
+ * QuickPick 实例选择器：弹出 UE 实例列表，可切换连接、复制 MCP 配置或手动刷新。
  */
 export async function showInstancePicker(manager: UnrealInstanceManager): Promise<void> {
     const instances = manager.instances;
@@ -33,6 +33,10 @@ export async function showInstancePicker(manager: UnrealInstanceManager): Promis
     }
 
     items.push({
+        label: "$(copy) 复制 MCP 客户端配置",
+        description: "Cursor mcp.json / CodeBuddy / Windsurf",
+    });
+    items.push({
         label: "$(sync) 刷新搜索",
         description: "",
     });
@@ -45,6 +49,11 @@ export async function showInstancePicker(manager: UnrealInstanceManager): Promis
     });
 
     if (!selected) return;
+
+    if (selected.label.includes("复制 MCP 客户端配置")) {
+        await vscode.commands.executeCommand("nexus.copyMcpConfig");
+        return;
+    }
 
     if (selected.label.includes("刷新搜索")) {
         await manager.discoverInstances();
@@ -79,13 +88,15 @@ function buildSseConfig(port: number, token: string, host: string, requireAuth: 
 }
 
 /**
- * 开 LAN 且多网卡时先选 IP，再选传输协议，复制 MCP 客户端配置（Bearer 仅本机 token）。
+ * 复制 MCP 客户端配置：未启用代理时用设置端口，已启动则用实际监听端口。
+ * 开 LAN 且多网卡时先选 IP，再选传输协议（Bearer 仅本机 token）。
  */
 export async function copyMcpConfig(port: number, token: string): Promise<void> {
-    const { auto, choices } = copyHostChoices(getConfig().listenLan);
+    const cfg = getConfig();
+    const { auto, choices } = copyHostChoices(cfg.listenLan);
     let host = auto;
     if (choices.length > 0) {
-                const picked = await vscode.window.showQuickPick(
+        const picked = await vscode.window.showQuickPick(
             choices.map((c: LanIPv4) => ({
                 label: c.name,
                 description: c.address,
@@ -102,12 +113,18 @@ export async function copyMcpConfig(port: number, token: string): Promise<void> 
     );
     if (!choice) { return; }
 
-    const requireAuth = getConfig().requireAuth;
     const config = choice.startsWith("SSE")
-        ? buildSseConfig(port, token, host, requireAuth)
-        : buildStreamConfig(port, token, host, requireAuth);
+        ? buildSseConfig(port, token, host, cfg.requireAuth)
+        : buildStreamConfig(port, token, host, cfg.requireAuth);
     await vscode.env.clipboard.writeText(config);
-    vscode.window.showInformationMessage("MCP 客户端配置已复制到剪贴板");
+    const copied = cfg.enabled
+        ? "MCP 客户端配置已复制到剪贴板"
+        : "MCP 客户端配置已复制到剪贴板（尚未启用代理，AI 连接前请打开 nexusMcp.enabled）";
+    const preview = await vscode.window.showInformationMessage(copied, "打开预览");
+    if (preview === "打开预览") {
+        const doc = await vscode.workspace.openTextDocument({ content: config, language: "plaintext" });
+        await vscode.window.showTextDocument(doc, { preview: true });
+    }
 }
 
 /**

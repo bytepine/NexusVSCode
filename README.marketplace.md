@@ -13,7 +13,7 @@ Install `nexus-mcp-unreal-*.zip` into your project's `Plugins/Developer/NexusLin
 ## Getting started
 
 1. Set `nexusMcp.enabled` to `true` in Settings (disabled by default; the proxy then listens on `:6900`).
-2. Point your AI client at `http://127.0.0.1:6900/stream` — or run the command **Nexus MCP: Copy MCP Client Configuration** to copy a ready-to-paste config.
+2. Point your AI client at `http://127.0.0.1:6900/stream` — or run **Nexus MCP: Copy MCP Client Configuration** (also in the status-bar instance list; works before the proxy is enabled).
 3. With UE running and NexusLink's MCP server on, the status bar shows the connected project name.
 
 ## Features
@@ -48,7 +48,7 @@ Source & docs: [github.com/bytepine/NexusVSCode](https://github.com/bytepine/Nex
 ## 快速开始
 
 1. 在 Settings 中把 `nexusMcp.enabled` 设为 `true`（默认关闭；开启后代理监听 `:6900`）。
-2. 将 AI 客户端指向 `http://127.0.0.1:6900/stream`——或执行命令 **Nexus MCP: 复制 MCP 客户端配置**（开 LAN 且多网卡时先选 IP）。
+2. 将 AI 客户端指向 `http://127.0.0.1:6900/stream`——或执行 **Nexus MCP: 复制 MCP 客户端配置**（状态栏实例列表也有入口；未启用代理时也可用）。
 3. UE 已运行且 NexusLink 的 MCP 服务器已开启时，状态栏会显示已连接的项目名。
 
 ## 功能

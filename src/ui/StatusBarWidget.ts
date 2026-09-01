@@ -8,7 +8,7 @@ import type { UnrealInstanceManager } from "../unreal/UnrealInstanceManager";
  *
  * - 未连接：显示 "$(plug) NexusLink: 未连接"
  * - 已连接：显示 "$(plug) NexusLink: {项目名}"
- * - 点击：弹出实例选择器
+ * - 点击：弹出实例选择器（含复制 MCP 配置）
  */
 export class StatusBarWidget implements vscode.Disposable {
 
@@ -48,7 +48,7 @@ export class StatusBarWidget implements vscode.Disposable {
         const mgr = this.manager;
         if (!mgr) {
             this.item.text = "$(plug) NexusLink: 已停用";
-            this.item.tooltip = "Nexus MCP 已在设置中禁用";
+            this.item.tooltip = "Nexus MCP 已在设置中禁用；点击可复制 MCP 配置";
             return;
         }
         const activity = mgr.sessionHub.getActivity();
@@ -91,7 +91,7 @@ export class StatusBarWidget implements vscode.Disposable {
             lines.push("UE：未连接");
         }
         if (extra) lines.push(extra);
-        lines.push("点击管理 UE 实例");
+        lines.push("点击管理 UE 实例 / 复制 MCP 配置");
         return lines.join("\n");
     }
 

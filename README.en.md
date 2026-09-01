@@ -54,14 +54,14 @@ Cross-machine and auth (switches, extra tokens, local file): [usage-guide §1](h
 
 ### 4. Status bar & commands
 
-The status bar shows the connected project name or disconnected; click to switch instances.
+The status bar shows the connected project name or disconnected; click to switch instances or copy MCP config.
 
 | Command (`Ctrl+Shift+P`) | Notes |
 |--------------------------|-------|
 | `Nexus MCP: Refresh UE Instances` | Manual scan |
 | `Nexus MCP: Select UE Instance` | Pick and connect |
 | `Nexus MCP: Disconnect` | Close current WebSocket |
-| `Nexus MCP: Copy MCP Client Configuration` | Copy AI client JSON; pick NIC IP when LAN has multiple addresses; Bearer is this machine's token only |
+| `Nexus MCP: Copy MCP Client Configuration` | Copy AI client JSON (works even before the proxy is enabled; uses settings port); pick NIC IP when LAN has multiple addresses; Bearer is this machine's token only; also in the status-bar instance list |
 | `Nexus MCP: Copy Auth Token` | Show the machine-shared token; copy with one click |
 | `Nexus MCP: Pause Agent Forwarding` | Queue remote calls at the proxy; do not send to UE |
 | `Nexus MCP: Resume Agent Forwarding` | Unpause |
