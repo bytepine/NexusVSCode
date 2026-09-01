@@ -7,6 +7,10 @@
 
 ## [Unreleased]
 
+### Changed
+
+- docs: README / 商店页 / 设置项说明补充如何复制 mcp.json 与鉴权 Token（Settings 里 Enabled、Require Auth 等可点命令链接）
+
 ### Fixed
 
 - fix(ui): 「复制 MCP 客户端配置」在代理未启用时也能用（默认关总开关时命令原先未注册）；未监听时取 `httpPort`，已启动则用实际端口；状态栏实例列表与停用点击增加同入口，复制后可「打开预览」

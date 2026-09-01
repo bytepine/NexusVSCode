@@ -61,8 +61,8 @@ The status bar shows the connected project name or disconnected; click to switch
 | `Nexus MCP: Refresh UE Instances` | Manual scan |
 | `Nexus MCP: Select UE Instance` | Pick and connect |
 | `Nexus MCP: Disconnect` | Close current WebSocket |
-| `Nexus MCP: Copy MCP Client Configuration` | Copy AI client JSON (works even before the proxy is enabled; uses settings port); pick NIC IP when LAN has multiple addresses; Bearer is this machine's token only; also in the status-bar instance list |
-| `Nexus MCP: Copy Auth Token` | Show the machine-shared token; copy with one click |
+| `Nexus MCP: 复制 MCP 客户端配置（mcp.json）` | See steps below |
+| `Nexus MCP: 复制鉴权 Token（Bearer）` | See steps below |
 | `Nexus MCP: Pause Agent Forwarding` | Queue remote calls at the proxy; do not send to UE |
 | `Nexus MCP: Resume Agent Forwarding` | Unpause |
 
@@ -70,11 +70,34 @@ A single instance auto-connects; multiple instances prefer `netRole=Editor`. Too
 
 ---
 
-## AI client
+## Copy mcp.json and auth
 
-Set `nexusMcp.enabled = true` first. Default `http://127.0.0.1:6900/stream`. On collision, use the startup notice.
+The same steps appear under **Enabled** / **Require Auth** in Settings (search `nexusMcp`); the descriptions include command links.
 
-**Cursor** (`~/.cursor/mcp.json`). Copy the token from **Copy Auth Token** or **Copy MCP Client Configuration**. Multiple tokens: `Bearer <tok1>, <tok2>`. If `nexusMcp.requireAuth` is off, omit `headers`. See [usage-guide §1.1](https://github.com/bytepine/NexusLink/blob/master/docs/usage-guide.md#11-鉴权).
+### Copy MCP JSON
+
+1. `Ctrl+Shift+P` → **Nexus MCP: 复制 MCP 客户端配置（mcp.json）** (works before the proxy is enabled; or click the status bar and pick the same item)
+2. Choose the transport (Streamable HTTP recommended). If LAN is on and there are multiple NICs, pick the IP for the url
+3. Paste into the AI client:
+   - **Cursor**: `~/.cursor/mcp.json` → the `nexus-unreal` entry under `mcpServers`
+   - **CodeBuddy / Windsurf**: the `Nexus` snippet from the same clipboard (custom MCP)
+4. Optionally **Open preview** to review before pasting
+
+After pasting, set `nexusMcp.enabled` to `true` so the AI client can connect. Default `http://127.0.0.1:6900/stream`. If the server is already running, the snippet uses the real listen port. On collision, follow the status bar / startup notice. Legacy clients: pick SSE (`/sse`).
+
+### Copy the auth token
+
+`nexusMcp.requireAuth` defaults to on; the AI client must send `Authorization: Bearer <token>`.
+
+| Approach | Notes |
+|----------|-------|
+| Copy mcp.json (recommended) | The snippet already includes this machine's token in `headers` |
+| Token only | `Ctrl+Shift+P` → **Nexus MCP: 复制鉴权 Token（Bearer）** (also from the status bar when disabled) |
+| Turn auth off | Set `nexusMcp.requireAuth` to false and omit `headers` |
+
+Multiple tokens: `Bearer <tok1>, <tok2>`. The machine token is shared with UE / Desktop / Rider — do not put it in `extraAuthTokens`. See [usage-guide §1.1](https://github.com/bytepine/NexusLink/blob/master/docs/usage-guide.md#11-鉴权).
+
+**Cursor** full-file example:
 
 ```json
 {
@@ -88,8 +111,6 @@ Set `nexusMcp.enabled = true` first. Default `http://127.0.0.1:6900/stream`. On 
   }
 }
 ```
-
-Legacy clients can use `http://127.0.0.1:6900/sse`. The command palette can copy a ready snippet.
 
 When connected, `tools/list` merges UE tools. For concurrent multi-instance calls, pass `targetPort` in `arguments`.
 

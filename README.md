@@ -61,8 +61,8 @@ VSCode / Cursor 端 MCP **代理**：本地 HTTP 服务器（默认 `:6900`）�
 | `Nexus MCP: 刷新 UE 实例` | 手动扫描 |
 | `Nexus MCP: 选择 UE 实例` | 弹出列表并连接 |
 | `Nexus MCP: 断开 UE 连接` | 断开当前 WebSocket |
-| `Nexus MCP: 复制 MCP 客户端配置` | 复制 AI 客户端 JSON（未启用代理时也可用，端口取自设置）；开 LAN 且多网卡时先选 IP；Bearer 仅本机 token；状态栏实例列表亦可入口 |
-| `Nexus MCP: 复制鉴权 Token` | 展示本机共享 token，可一键复制 |
+| `Nexus MCP: 复制 MCP 客户端配置（mcp.json）` | 见下方步骤 |
+| `Nexus MCP: 复制鉴权 Token（Bearer）` | 见下方步骤 |
 | `Nexus MCP: 暂停 Agent 转发` | 后续远端调用在代理排队，不发往 UE |
 | `Nexus MCP: 恢复 Agent 转发` | 解除暂停 |
 
@@ -70,11 +70,34 @@ VSCode / Cursor 端 MCP **代理**：本地 HTTP 服务器（默认 `:6900`）�
 
 ---
 
-## AI 客户端
+## 复制 mcp.json 与鉴权
 
-须先 `nexusMcp.enabled = true`。默认 `http://127.0.0.1:6900/stream`。端口顺延时以启动通知为准。
+Settings 搜索 `nexusMcp` 时，**Enabled** / **Require Auth** 说明里也有同样步骤（可点命令链接）。
 
-**Cursor**（`~/.cursor/mcp.json`）。Token 用命令面板「复制鉴权 Token」或「复制 MCP 配置」。可写多个：`Bearer <tok1>, <tok2>`。关闭 `nexusMcp.requireAuth` 时可不带 `headers`。规则见 [usage-guide §1.1](https://github.com/bytepine/NexusLink/blob/master/docs/usage-guide.md#11-鉴权)。
+### 复制 MCP JSON
+
+1. `Ctrl+Shift+P` → **Nexus MCP: 复制 MCP 客户端配置（mcp.json）**（未启用代理也能用；或点状态栏选同一项）
+2. 选传输协议（推荐 Streamable HTTP）；开 LAN 且多网卡时先选写入 url 的 IP
+3. 粘贴到 AI 客户端：
+   - **Cursor**：`~/.cursor/mcp.json` → `mcpServers` 下的 `nexus-unreal` 段
+   - **CodeBuddy / Windsurf**：同一剪贴板里的 `Nexus` 段（自定义 MCP）
+4. 可选「打开预览」核对后再贴
+
+粘贴后须将 `nexusMcp.enabled` 设为 `true`，AI 才能连上。默认 `http://127.0.0.1:6900/stream`。已启动则按实际监听端口写入；端口顺延时以状态栏 / 启动通知为准。旧版客户端选 SSE（`/sse`）。
+
+### 复制鉴权 Token
+
+默认 `nexusMcp.requireAuth = true`，AI 连接须带 `Authorization: Bearer <token>`。
+
+| 做法 | 说明 |
+|------|------|
+| 复制 mcp.json（推荐） | 片段已含本机 token 的 `headers`，一般不必再单独复制 |
+| 只要 token | `Ctrl+Shift+P` → **Nexus MCP: 复制鉴权 Token（Bearer）**（停用时点状态栏也可） |
+| 关掉鉴权 | 关闭 `nexusMcp.requireAuth`，mcp.json 可不带 `headers` |
+
+可写多个：`Bearer <tok1>, <tok2>`。本机 token 与 UE / Desktop / Rider 共用，不要填进 `extraAuthTokens`。规则见 [usage-guide §1.1](https://github.com/bytepine/NexusLink/blob/master/docs/usage-guide.md#11-鉴权)。
+
+**Cursor** 完整文件示例：
 
 ```json
 {
@@ -88,8 +111,6 @@ VSCode / Cursor 端 MCP **代理**：本地 HTTP 服务器（默认 `:6900`）�
   }
 }
 ```
-
-旧版客户端可用 `http://127.0.0.1:6900/sse`。也可用命令面板一键复制。
 
 已连接时 `tools/list` 合并 UE 工具。多实例并发可在 `arguments` 中带 `targetPort`。
 

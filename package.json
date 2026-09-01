@@ -38,14 +38,16 @@
         "nexusMcp.enabled": {
           "type": "boolean",
           "default": false,
-          "description": "启用 Nexus MCP 代理服务器。可用命令「Nexus MCP: 复制 MCP 客户端配置」生成 Cursor mcp.json 等片段。"
+          "description": "启用 Nexus MCP 代理服务器。复制 mcp.json：命令面板「Nexus MCP: 复制 MCP 客户端配置」；复制鉴权：命令面板「Nexus MCP: 复制鉴权 Token」。也可点状态栏。",
+          "markdownDescription": "启用 Nexus MCP 代理服务器（默认关；打开后监听下方端口）。\n\n**复制 mcp.json**：命令面板运行 [Nexus MCP: 复制 MCP 客户端配置](command:nexus.copyMcpConfig)（或点状态栏）。选 Streamable HTTP，把 Cursor 片段贴进 `~/.cursor/mcp.json` 的 `mcpServers`；CodeBuddy / Windsurf 用剪贴板里的另一段。\n\n**鉴权**：默认需要 `Authorization: Bearer`。配置片段已含本机 token；也可 [复制鉴权 Token](command:nexus.copyAuthToken)。关闭下方「Require Auth」后可不带 `headers`。"
         },
         "nexusMcp.httpPort": {
           "type": "number",
           "default": 6900,
           "minimum": 1024,
           "maximum": 65535,
-          "description": "Streamable HTTP MCP 服务端口（AI 客户端通过此端口连接）"
+          "description": "Streamable HTTP MCP 服务端口（AI 客户端通过此端口连接）。复制 mcp.json 时：已启动用实际端口，未启动用本设置。",
+          "markdownDescription": "Streamable HTTP MCP 服务端口（AI 客户端连此端口，默认 `6900`）。[复制 MCP 客户端配置](command:nexus.copyMcpConfig) 时：已启动用实际监听端口，未启动用本值写入 url。"
         },
         "nexusMcp.scanPortStart": {
           "type": "number",
@@ -83,18 +85,21 @@
         "nexusMcp.listenLan": {
           "type": "boolean",
           "default": false,
-          "description": "MCP HTTP 绑 0.0.0.0，允许局域网 AI 客户端连接（默认须 Bearer，可关鉴权；勿映射到公网）"
+          "description": "MCP HTTP 绑 0.0.0.0，允许局域网 AI 客户端连接（默认须 Bearer，可关鉴权；勿映射到公网）。复制 mcp.json 时多网卡会先选 IP。",
+          "markdownDescription": "MCP HTTP 绑 `0.0.0.0`，允许局域网 AI 客户端连接（默认须 Bearer；勿映射公网）。[复制 MCP 客户端配置](command:nexus.copyMcpConfig) 时若有多块网卡，会先选写入 url 的 IP。"
         },
         "nexusMcp.requireAuth": {
           "type": "boolean",
           "default": true,
-          "description": "AI 连接本代理是否校验 Bearer。默认开；关闭后与旧版代理相同（无需 Authorization）。连 UE 仍按对方 /status.authRequired"
+          "description": "AI 连接本代理是否校验 Bearer。默认开。复制 token：命令面板「Nexus MCP: 复制鉴权 Token」；复制 mcp.json 时片段已带 headers。关闭后无需 Authorization。连 UE 仍按对方 /status.authRequired。",
+          "markdownDescription": "AI 连接本代理是否校验 Bearer（默认开）。\n\n- 复制 token：[Nexus MCP: 复制鉴权 Token](command:nexus.copyAuthToken)（或停用时点状态栏）\n- [复制 MCP 客户端配置](command:nexus.copyMcpConfig) 生成的片段已含 `Authorization: Bearer <本机 token>`\n- 关闭后与旧版相同（mcp.json 可不带 `headers`）\n- 连 UE 仍按对方 `/status.authRequired`"
         },
         "nexusMcp.extraAuthTokens": {
           "type": "array",
           "items": { "type": "string" },
           "default": [],
-          "description": "额外鉴权 token（其他机器，每项一个或逗号分隔）。AI Bearer 命中任一项即可；连远程 UE 时也可作候选。本机 UE 自动读 mcp-auth-token，无需填写"
+          "description": "额外鉴权 token（其他机器，每项一个或逗号分隔）。本机 token 用「复制鉴权 Token」，无需填在这里。AI Bearer 命中任一项即可。",
+          "markdownDescription": "额外鉴权 token（其他机器；每项一个或逗号分隔）。AI Bearer 命中任一项即可；连远程 UE 时也可作候选。\n\n**本机 token 不要填在这里**：用 [复制鉴权 Token](command:nexus.copyAuthToken)，或复制 mcp.json 时自动写入。本机 UE 自动读 `mcp-auth-token`。"
         },
         "nexusMcp.remoteUnreal": {
           "type": "array",
@@ -126,11 +131,11 @@
       },
       {
         "command": "nexus.copyMcpConfig",
-        "title": "Nexus MCP: 复制 MCP 客户端配置"
+        "title": "Nexus MCP: 复制 MCP 客户端配置（mcp.json）"
       },
       {
         "command": "nexus.copyAuthToken",
-        "title": "Nexus MCP: 复制鉴权 Token"
+        "title": "Nexus MCP: 复制鉴权 Token（Bearer）"
       },
       {
         "command": "nexus.pauseAgent",
