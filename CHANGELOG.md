@@ -7,6 +7,8 @@
 
 ## [Unreleased]
 
+## [2.0.1] - 2026-09-01
+
 ### Changed
 
 - docs: README / 商店页 / 设置项说明补充如何复制 mcp.json 与鉴权 Token（Settings 里 Enabled、Require Auth 等可点命令链接）
