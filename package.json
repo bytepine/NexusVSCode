@@ -39,7 +39,7 @@
           "type": "boolean",
           "default": false,
           "description": "启用 Nexus MCP 代理服务器。复制 mcp.json：命令面板「Nexus MCP: 复制 MCP 客户端配置」；复制鉴权：命令面板「Nexus MCP: 复制鉴权 Token」。也可点状态栏。",
-          "markdownDescription": "启用 Nexus MCP 代理服务器（默认关；打开后监听下方端口）。\n\n**复制 mcp.json**：命令面板运行 [Nexus MCP: 复制 MCP 客户端配置](command:nexus.copyMcpConfig)（或点状态栏）。选 Streamable HTTP，把 Cursor 片段贴进 `~/.cursor/mcp.json` 的 `mcpServers`；CodeBuddy / Windsurf 用剪贴板里的另一段。\n\n**鉴权**：默认需要 `Authorization: Bearer`。配置片段已含本机 token；也可 [复制鉴权 Token](command:nexus.copyAuthToken)。关闭下方「Require Auth」后可不带 `headers`。"
+          "markdownDescription": "启用 Nexus MCP 代理服务器（默认关；打开后监听下方端口）。\n\n**复制 mcp.json**：命令面板运行 [Nexus MCP: 复制 MCP 客户端配置](command:nexus.copyMcpConfig)（或点状态栏）。依次选传输协议与客户端（Cursor / CodeBuddy），把生成的一份片段贴进对应配置。\n\n**鉴权**：默认需要 `Authorization: Bearer`。配置片段已含本机 token；也可 [复制鉴权 Token](command:nexus.copyAuthToken)。关闭下方「Require Auth」后可不带 `headers`。"
         },
         "nexusMcp.httpPort": {
           "type": "number",

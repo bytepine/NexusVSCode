@@ -13,7 +13,7 @@ Install `nexus-mcp-unreal-*.zip` into your project's `Plugins/Developer/NexusLin
 ## Getting started
 
 1. Set `nexusMcp.enabled` to `true` in Settings (disabled by default; the proxy then listens on `:6900`).
-2. **Copy mcp.json**: Command Palette → **Nexus MCP: 复制 MCP 客户端配置（mcp.json）** (or click the status bar). Choose Streamable HTTP. Paste the Cursor snippet into `~/.cursor/mcp.json` under `mcpServers`. CodeBuddy / Windsurf: paste the other snippet from the same clipboard.
+2. **Copy mcp.json**: Command Palette → **Nexus MCP: 复制 MCP 客户端配置（mcp.json）** (or click the status bar). Choose Streamable HTTP, then Cursor or CodeBuddy. Paste the single snippet into that client's MCP config (`~/.cursor/mcp.json` `mcpServers` for Cursor; custom MCP for CodeBuddy / Windsurf).
 3. **Auth**: snippets already include `Authorization: Bearer <this machine's token>`. Token only: **Nexus MCP: 复制鉴权 Token（Bearer）**. Turn off `nexusMcp.requireAuth` to omit `headers`.
 4. With UE running and NexusLink's MCP server on, the status bar shows the connected project name.
 
@@ -49,7 +49,7 @@ Source & docs: [github.com/bytepine/NexusVSCode](https://github.com/bytepine/Nex
 ## 快速开始
 
 1. 在 Settings 中把 `nexusMcp.enabled` 设为 `true`（默认关闭；开启后代理监听 `:6900`）。
-2. **复制 mcp.json**：命令面板 → **Nexus MCP: 复制 MCP 客户端配置（mcp.json）**（或点状态栏）。选 Streamable HTTP，把 Cursor 片段贴进 `~/.cursor/mcp.json` 的 `mcpServers`；CodeBuddy / Windsurf 用同一剪贴板里的另一段。
+2. **复制 mcp.json**：命令面板 → **Nexus MCP: 复制 MCP 客户端配置（mcp.json）**（或点状态栏）。选 Streamable HTTP，再选 Cursor 或 CodeBuddy，把这一份片段贴进对应客户端（Cursor：`~/.cursor/mcp.json` 的 `mcpServers`；CodeBuddy / Windsurf：自定义 MCP）。
 3. **鉴权**：配置片段已含 `Authorization: Bearer <本机 token>`。只要 token：命令面板 **Nexus MCP: 复制鉴权 Token（Bearer）**。关闭 `nexusMcp.requireAuth` 后可不带 `headers`。Settings 里 Enabled / Require Auth 的说明也可点命令链接。
 4. UE 已运行且 NexusLink 的 MCP 服务器已开启时，状态栏会显示已连接的项目名。
 

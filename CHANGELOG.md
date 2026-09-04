@@ -7,6 +7,12 @@
 
 ## [Unreleased]
 
+## [2.0.2] - 2026-09-04
+
+### Changed
+
+- ui: `copyMcpConfig` 在选传输协议后再选客户端（Cursor / CodeBuddy），剪贴板只写入一份片段；toast 标明复制的是哪一端
+
 ## [2.0.1] - 2026-09-01
 
 ### Changed

@@ -77,10 +77,10 @@ Settings 搜索 `nexusMcp` 时，**Enabled** / **Require Auth** 说明里也有�
 ### 复制 MCP JSON
 
 1. `Ctrl+Shift+P` → **Nexus MCP: 复制 MCP 客户端配置（mcp.json）**（未启用代理也能用；或点状态栏选同一项）
-2. 选传输协议（推荐 Streamable HTTP）；开 LAN 且多网卡时先选写入 url 的 IP
-3. 粘贴到 AI 客户端：
+2. 选传输协议（推荐 Streamable HTTP），再选客户端（Cursor / CodeBuddy）；开 LAN 且多网卡时先选写入 url 的 IP
+3. 粘贴到对应 AI 客户端（一次只复制一份）：
    - **Cursor**：`~/.cursor/mcp.json` → `mcpServers` 下的 `nexus-unreal` 段
-   - **CodeBuddy / Windsurf**：同一剪贴板里的 `Nexus` 段（自定义 MCP）
+   - **CodeBuddy / Windsurf**：自定义 MCP 的 `Nexus` 段
 4. 可选「打开预览」核对后再贴
 
 粘贴后须将 `nexusMcp.enabled` 设为 `true`，AI 才能连上。默认 `http://127.0.0.1:6900/stream`。已启动则按实际监听端口写入；端口顺延时以状态栏 / 启动通知为准。旧版客户端选 SSE（`/sse`）。

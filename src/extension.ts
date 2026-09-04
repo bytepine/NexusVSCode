@@ -51,7 +51,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
                     [
                         {
                             label: "$(copy) 复制 MCP 客户端配置",
-                            description: "Cursor mcp.json / CodeBuddy / Windsurf",
+                            description: "选协议与客户端后复制一份片段",
                         },
                         {
                             label: "$(key) 复制鉴权 Token",

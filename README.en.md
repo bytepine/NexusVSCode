@@ -77,10 +77,10 @@ The same steps appear under **Enabled** / **Require Auth** in Settings (search `
 ### Copy MCP JSON
 
 1. `Ctrl+Shift+P` → **Nexus MCP: 复制 MCP 客户端配置（mcp.json）** (works before the proxy is enabled; or click the status bar and pick the same item)
-2. Choose the transport (Streamable HTTP recommended). If LAN is on and there are multiple NICs, pick the IP for the url
-3. Paste into the AI client:
+2. Choose the transport (Streamable HTTP recommended), then the client (Cursor / CodeBuddy). If LAN is on and there are multiple NICs, pick the IP for the url first
+3. Paste into that AI client (one snippet per copy):
    - **Cursor**: `~/.cursor/mcp.json` → the `nexus-unreal` entry under `mcpServers`
-   - **CodeBuddy / Windsurf**: the `Nexus` snippet from the same clipboard (custom MCP)
+   - **CodeBuddy / Windsurf**: the `Nexus` entry under custom MCP
 4. Optionally **Open preview** to review before pasting
 
 After pasting, set `nexusMcp.enabled` to `true` so the AI client can connect. Default `http://127.0.0.1:6900/stream`. If the server is already running, the snippet uses the real listen port. On collision, follow the status bar / startup notice. Legacy clients: pick SSE (`/sse`).
