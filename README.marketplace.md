@@ -8,7 +8,7 @@ Blueprints, assets, PIE control, materials and other engine capabilities are pro
 
 [NexusLink (GitHub)](https://github.com/bytepine/NexusLink) · [Download (Releases)](https://github.com/bytepine/NexusLink/releases).
 
-Install `nexus-mcp-unreal-*.zip` into your project's `Plugins/Developer/NexusLink`, enable it, then turn on *Editor Preferences > Plugins > NexusLink > Enable MCP Server*.
+Install `nexus-mcp-unreal-*.zip` into your project's `Plugins/NexusLink`, enable it, then turn on *Editor Preferences > Plugins > NexusLink > Enable MCP Server*.
 
 ## Getting started
 
@@ -44,7 +44,7 @@ Source & docs: [github.com/bytepine/NexusVSCode](https://github.com/bytepine/Nex
 
 [NexusLink（GitHub）](https://github.com/bytepine/NexusLink) · [下载（Releases）](https://github.com/bytepine/NexusLink/releases)。
 
-将 `nexus-mcp-unreal-*.zip` 解压到项目的 `Plugins/Developer/NexusLink`，启用后在 *Editor Preferences > Plugins > NexusLink > Enable MCP Server* 勾选开启。
+将 `nexus-mcp-unreal-*.zip` 解压到项目的 `Plugins/NexusLink`，启用后在 *Editor Preferences > Plugins > NexusLink > Enable MCP Server* 勾选开启。
 
 ## 快速开始
 

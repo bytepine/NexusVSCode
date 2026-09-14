@@ -7,6 +7,10 @@
 
 ## [Unreleased]
 
+### Changed
+
+- docs: UE 插件安装路径改为 `Plugins/NexusLink`
+
 ## [2.0.2] - 2026-09-04
 
 ### Changed
