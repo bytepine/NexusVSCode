@@ -66,7 +66,7 @@ The status bar shows the connected project name or disconnected; click to switch
 | `Nexus MCP: Pause Agent Forwarding` | Queue remote calls at the proxy; do not send to UE |
 | `Nexus MCP: Resume Agent Forwarding` | Unpause |
 
-A single instance auto-connects; multiple instances prefer `netRole=Editor`. Tool-list cache is kept across disconnects. Durable reads may return a snapshot with `_proxy.degraded`. Session contract: [proxy-session.md](https://github.com/bytepine/NexusLink/blob/master/docs/proxy-session.md).
+A single instance auto-connects; multiple instances prefer `hostKind=Editor` (legacy UE without that field falls back to `netRole=Editor`). Tool-list cache is kept across disconnects. Durable reads may return a snapshot with `_proxy.degraded`. Session contract: [proxy-session.md](https://github.com/bytepine/NexusLink/blob/master/docs/proxy-session.md).
 
 ---
 

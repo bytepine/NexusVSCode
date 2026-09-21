@@ -66,7 +66,7 @@ VSCode / Cursor 端 MCP **代理**：本地 HTTP 服务器（默认 `:6900`）�
 | `Nexus MCP: 暂停 Agent 转发` | 后续远端调用在代理排队，不发往 UE |
 | `Nexus MCP: 恢复 Agent 转发` | 解除暂停 |
 
-唯一实例自动连接；多实例优先 `netRole=Editor`。断线保留工具列表缓存；耐久读可返回带 `_proxy.degraded` 的上次快照。会话层契约见 [proxy-session.md](https://github.com/bytepine/NexusLink/blob/master/docs/proxy-session.md)。
+唯一实例自动连接；多实例优先 `hostKind=Editor`（旧 UE 无该字段时回落 `netRole=Editor`）。断线保留工具列表缓存；耐久读可返回带 `_proxy.degraded` 的上次快照。会话层契约见 [proxy-session.md](https://github.com/bytepine/NexusLink/blob/master/docs/proxy-session.md)。
 
 ---
 

@@ -10,8 +10,12 @@ export interface UnrealInstanceInfo {
     wsPort: number;
     projectName: string;
     engineVersion: string;
-    /** UE 网络角色（DedicatedServer/ListenServer/Client/Standalone/Editor）。 */
+    /** UE 网络角色（DedicatedServer/ListenServer/Client/Standalone/Editor）。PIE 期间会变成 Standalone。 */
     netRole?: string;
+    /** 进程级宿主：Editor / Game / DedicatedServer。不随 PIE 变化；选实例优先看此项。 */
+    hostKind?: string;
+    /** 当前是否存在 PIE/Game World。 */
+    hasPlayWorld?: boolean;
     /** UE 工具列表暴露模式（历史字段），供状态探测。 */
     toolsListMode?: string;
     /** 实例注册文件中的鉴权 token；探活后再读，不来自 /status。 */

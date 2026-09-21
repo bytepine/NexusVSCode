@@ -310,6 +310,8 @@ export class NexusMcpDispatcher {
                 connected: this.unrealManager.isConnectedInfo(info) && wsOpen,
             };
             if (info.netRole) entry.netRole = info.netRole;
+            if (info.hostKind) entry.hostKind = info.hostKind;
+            if (typeof info.hasPlayWorld === "boolean") entry.hasPlayWorld = info.hasPlayWorld;
             return entry;
         });
         return makeResult(id, {

@@ -17,6 +17,16 @@ import {
 import { ProxyFeedbackBuffer, isMethodNotFoundError, type ProxyFeedbackEvent } from "./ProxyFeedbackBuffer";
 import { SessionHub } from "../proxy/SessionHub";
 
+/** 优先 hostKind=Editor；旧 UE 无 hostKind 时回落 netRole=Editor。 */
+export function pickEditorInstance(found: UnrealInstanceInfo[]): UnrealInstanceInfo | undefined {
+    if (found.length === 0) return undefined;
+    const byKind = found.find(i => i.hostKind?.toLowerCase() === "editor");
+    if (byKind) return byKind;
+    const byRole = found.find(i => !i.hostKind && i.netRole?.toLowerCase() === "editor");
+    if (byRole) return byRole;
+    return found[0];
+}
+
 /** WebSocket JSON-RPC 请求结果（区分断连 vs 超时，避免误报「未连接」）。 */
 export type WsRequestResult =
     | { status: "ok"; response: Record<string, unknown> }
@@ -184,8 +194,7 @@ export class UnrealInstanceManager extends EventEmitter {
                 target = found.find(i => instanceKey(i.host, i.port) === pref) ?? null;
             }
             if (!target) {
-                const editor = found.find(i => i.netRole?.toLowerCase() === "editor");
-                target = editor ?? found[0];
+                target = pickEditorInstance(found) ?? found[0];
             }
             if (target) await this.connectTo(target.port, false, target.host);
         }
@@ -289,6 +298,8 @@ export class UnrealInstanceManager extends EventEmitter {
                         projectName: json.projectName ?? "",
                         engineVersion: json.engineVersion ?? "",
                         netRole: json.netRole ?? undefined,
+                        hostKind: typeof json.hostKind === "string" ? json.hostKind : undefined,
+                        hasPlayWorld: typeof json.hasPlayWorld === "boolean" ? json.hasPlayWorld : undefined,
                         toolsListMode: json.toolsListMode ?? "starter",
                         authToken: tokenOverride
                             ?? (probeHost === LOOPBACK_HOST ? readUeAuthToken(port) : undefined),
