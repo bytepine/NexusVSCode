@@ -7,10 +7,15 @@
 
 ## [Unreleased]
 
+## [2.1.0] - 2026-09-21
+
+### Added
+
+- feat(unreal): 多实例自动连接优先 `hostKind=Editor`（旧 UE 无该字段时回落 `netRole=Editor`）；`list_unreal_instances` 透出 `hostKind` / `hasPlayWorld`
+
 ### Changed
 
 - docs: UE 插件安装路径改为 `Plugins/NexusLink`
-- feat(unreal): 多实例自动连接优先 `hostKind=Editor`（旧 UE 无该字段时回落 `netRole=Editor`）；`list_unreal_instances` 透出 `hostKind` / `hasPlayWorld`
 
 ## [2.0.2] - 2026-09-04
 
