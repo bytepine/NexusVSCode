@@ -36,6 +36,8 @@ const INITIALIZE_WARMUP_MS = 2000;
 export class NexusMcpDispatcher {
 
     private state = McpSessionState.WaitingForInitialize;
+    /** 本 MCP 会话内「总是允许」的能力名。 */
+    private readonly alwaysAllow = new Set<string>();
 
     get isWaitingForInitialize(): boolean {
         return this.state === McpSessionState.WaitingForInitialize;
@@ -109,6 +111,7 @@ export class NexusMcpDispatcher {
     // ----- MCP 生命周期 -----
 
     private async handleInitialize(id: unknown, params?: Record<string, unknown>): Promise<string> {
+        this.alwaysAllow.clear();
         if (this.state !== McpSessionState.WaitingForInitialize) {
             this.state = McpSessionState.WaitingForInitialize;
         }
@@ -207,7 +210,7 @@ export class NexusMcpDispatcher {
         const callInfo = parseCall(toolName, args);
         const hub = this.unrealManager.sessionHub;
         await hub.waitIfPaused();
-        const gate = await hub.confirmIfNeeded(callInfo);
+        const gate = await this.confirmWrite(callInfo);
         if (gate === "deny") {
             return makeError(id, INTERNAL_ERROR, "Write blocked by proxy gate (user denied).", deniedErrorData());
         }
@@ -218,6 +221,17 @@ export class NexusMcpDispatcher {
         } finally {
             hub.endCall();
         }
+    }
+
+    /** 「总是允许」只记在当前 Dispatcher（一条 MCP 会话）上。 */
+    private async confirmWrite(info: ReturnType<typeof parseCall>): Promise<"allow" | "deny"> {
+        if (this.alwaysAllow.has(info.capability)) return "allow";
+        const decision = await this.unrealManager.sessionHub.confirmIfNeeded(info);
+        if (decision === "always") {
+            this.alwaysAllow.add(info.capability);
+            return "allow";
+        }
+        return decision;
     }
 
     private async forwardRemoteCall(

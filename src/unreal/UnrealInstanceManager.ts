@@ -7,7 +7,7 @@ import type { UnrealInstanceInfo } from "./types";
 import { DEFAULT_PROXY_CONFIG, parseProxyConfig, type ProxyConfig } from "./proxyConfig";
 import { logger } from "../util/logger";
 import { readUeAuthToken, readMachineAuthToken, parseAuthTokens } from "../util/mcpAuth";
-import { getConfig } from "../config/NexusLinkSettings";
+import { getConfig, clampScanPorts } from "../config/NexusLinkSettings";
 import {
     LOOPBACK_HOST,
     instanceKey,
@@ -208,8 +208,7 @@ export class UnrealInstanceManager extends EventEmitter {
     /** 并发扫描端口范围（分片，每批 SCAN_CONCURRENCY 个，与 Rider 线程池上限对齐）。 */
     private async scanPortsParallel(): Promise<UnrealInstanceInfo[]> {
         // 防御：用户将 start/end 配置颠倒时自动交换，避免 for 循环直接不执行导致永无结果
-        const start = Math.min(this.scanPortStart, this.scanPortEnd);
-        const end = Math.max(this.scanPortStart, this.scanPortEnd);
+        const [start, end] = clampScanPorts(this.scanPortStart, this.scanPortEnd);
         const found: UnrealInstanceInfo[] = [];
         for (let port = start; port <= end; port += UnrealInstanceManager.SCAN_CONCURRENCY) {
             const batch: Promise<UnrealInstanceInfo | null>[] = [];

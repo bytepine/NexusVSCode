@@ -19,7 +19,6 @@ import {
     extractTtlMeta,
     injectProxyMeta,
     isDurableRead,
-    isWriteCapability,
     needsGate,
     sectionsCovered,
     structuredCloneSafe,
@@ -55,10 +54,14 @@ export class SessionHub extends EventEmitter {
     writeGate: WriteGateMode = "destructive";
     private paused = false;
     private readonly pauseWaiters: Array<() => void> = [];
-    private readonly alwaysAllow = new Set<string>();
     private readonly cache = new Map<string, CacheEntry>();
     private activity: ActivityState | null = null;
     private gatePrompter: GatePrompter | null = null;
+
+    constructor() {
+        super();
+        purgeOffload();
+    }
 
     setGatePrompter(fn: GatePrompter | null): void {
         this.gatePrompter = fn;
@@ -110,7 +113,6 @@ export class SessionHub extends EventEmitter {
 
     async confirmIfNeeded(info: CallInfo): Promise<GateDecision> {
         if (!needsGate(this.writeGate, info.capability, info.innerArgs)) return "allow";
-        if (this.alwaysAllow.has(info.capability)) return "allow";
         if (!this.gatePrompter) return "allow";
         // 用户先做出选择时必须清掉定时器，否则挂起的 timer 会拖住扩展宿主退出
         let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
@@ -119,10 +121,6 @@ export class SessionHub extends EventEmitter {
         });
         const decision = await Promise.race([this.gatePrompter(info), timer])
             .finally(() => clearTimeout(timeoutHandle));
-        if (decision === "always") {
-            this.alwaysAllow.add(info.capability);
-            return "allow";
-        }
         return decision;
     }
 
@@ -217,19 +215,54 @@ export class SessionHub extends EventEmitter {
     }
 
     private offload(result: unknown): unknown {
-        const dir = path.join(os.tmpdir(), "nexus-mcp-offload");
-        try { fs.mkdirSync(dir, { recursive: true }); } catch { /* ignore */ }
-        const file = path.join(dir, `offload-${Date.now()}-${Math.random().toString(16).slice(2)}.json`);
+        pruneOffload(OFFLOAD_MAX_AGE_MS);
+        try { fs.mkdirSync(OFFLOAD_DIR, { recursive: true, mode: 0o700 }); } catch { /* ignore */ }
+        try { fs.chmodSync(OFFLOAD_DIR, 0o700); } catch { /* windows */ }
+        const file = path.join(OFFLOAD_DIR, `offload-${Date.now()}-${Math.random().toString(16).slice(2)}.json`);
         const parsed = result && typeof result === "object"
             ? (result as Record<string, unknown>)
             : { value: result };
         const text = JSON.stringify(parsed);
-        try { fs.writeFileSync(file, text, "utf8"); } catch { return result; }
+        try { fs.writeFileSync(file, text, { encoding: "utf8", mode: 0o600 }); } catch { return result; }
+        try { fs.chmodSync(file, 0o600); } catch { /* windows */ }
         const meta: ProxyMeta = { offloaded: true, path: file, bytes: Buffer.byteLength(text, "utf8") };
         return injectProxyMeta({
             content: [{ type: "text", text: JSON.stringify({ summary: "payload offloaded", path: file, bytes: meta.bytes }) }],
             isError: false,
         }, meta);
+    }
+}
+
+const OFFLOAD_DIR = path.join(os.tmpdir(), "nexus-mcp-offload");
+const OFFLOAD_MAX_AGE_MS = 60 * 60 * 1000;
+
+function purgeOffload(): void {
+    let names: string[];
+    try {
+        names = fs.readdirSync(OFFLOAD_DIR);
+    } catch {
+        return;
+    }
+    for (const name of names) {
+        try { fs.rmSync(path.join(OFFLOAD_DIR, name), { recursive: true, force: true }); } catch { /* ignore */ }
+    }
+}
+
+function pruneOffload(maxAgeMs: number): void {
+    let names: string[];
+    try {
+        names = fs.readdirSync(OFFLOAD_DIR);
+    } catch {
+        return;
+    }
+    const cutoff = Date.now() - maxAgeMs;
+    for (const name of names) {
+        const p = path.join(OFFLOAD_DIR, name);
+        try {
+            if (fs.statSync(p).mtimeMs < cutoff) {
+                fs.rmSync(p, { recursive: true, force: true });
+            }
+        } catch { /* ignore */ }
     }
 }
 
@@ -244,16 +277,3 @@ export function wrapDegraded(result: unknown, snapshotAt: string): unknown {
 export function deniedErrorData(): Record<string, unknown> {
     return { errorKind: "proxy_denied" };
 }
-
-export {
-    isWriteCapability,
-    needsGate,
-    parseCall,
-    parseWriteGate,
-    injectProxyMeta,
-    extractTtlMeta,
-    sectionsCovered,
-    isDestructive,
-    isDurableRead,
-    defaultTtlMs,
-};

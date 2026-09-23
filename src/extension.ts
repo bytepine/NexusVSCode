@@ -5,7 +5,7 @@ import { UnrealInstanceManager } from "./unreal/UnrealInstanceManager";
 import { NexusMcpHttpServer, findAvailablePort } from "./mcp/NexusMcpServer";
 import { StatusBarWidget } from "./ui/StatusBarWidget";
 import { showInstancePicker, copyMcpConfig, showAndCopyAuthToken } from "./ui/InstancePicker";
-import { getConfig, onConfigChanged } from "./config/NexusLinkSettings";
+import { getConfig, onConfigChanged, MAX_SCAN_PORT_SPAN, scanPortSpan } from "./config/NexusLinkSettings";
 import { logger } from "./util/logger";
 import { mcpDisplayHost } from "./util/lanHost";
 import { loadOrCreateMachineToken } from "./util/mcpAuth";
@@ -21,10 +21,12 @@ let preferredListenLan = false;
 let commandsRegistered = false;
 const PROXY_TOKEN_SECRET = "nexusMcp.proxyToken";
 let prevConfig = getConfig();
-let revertingLanAuth = false;
+let revertingConfig = false;
 
 const LAN_AUTH_WARN =
     "局域网可达且未鉴权时，同网段主机都能控制编辑器。确定继续？不要做公网映射。";
+const REMOTE_PLAIN_WARN =
+    "连远程 UE 走明文 WebSocket，鉴权 token 可被同网段看到。确定继续？";
 
 async function getOrCreateProxyToken(context: vscode.ExtensionContext): Promise<string> {
     const seeded = await context.secrets.get(PROXY_TOKEN_SECRET);
@@ -79,8 +81,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     // 配置变更监听：放在 enabled 判断之外，确保用户后续开关能热生效
     context.subscriptions.push(
         onConfigChanged(async newConfig => {
-            if (revertingLanAuth) {
-                revertingLanAuth = false;
+            if (revertingConfig) {
+                revertingConfig = false;
                 prevConfig = newConfig;
             } else {
                 const wasDanger = prevConfig.listenLan && !prevConfig.requireAuth;
@@ -92,7 +94,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
                         "继续",
                     );
                     if (pick !== "继续") {
-                        revertingLanAuth = true;
+                        revertingConfig = true;
                         const cfg = vscode.workspace.getConfiguration("nexusMcp");
                         if (newConfig.listenLan !== prevConfig.listenLan) {
                             await cfg.update("listenLan", prevConfig.listenLan, vscode.ConfigurationTarget.Global);
@@ -103,6 +105,21 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
                         return;
                     }
                 }
+                const enteredRemote = prevConfig.remoteUnreal.length === 0 && newConfig.remoteUnreal.length > 0;
+                if (enteredRemote) {
+                    const pick = await vscode.window.showWarningMessage(
+                        REMOTE_PLAIN_WARN,
+                        { modal: true },
+                        "继续",
+                    );
+                    if (pick !== "继续") {
+                        revertingConfig = true;
+                        const cfg = vscode.workspace.getConfiguration("nexusMcp");
+                        await cfg.update("remoteUnreal", prevConfig.remoteUnreal, vscode.ConfigurationTarget.Global);
+                        return;
+                    }
+                }
+                warnIfScanSpanClamped();
                 prevConfig = newConfig;
             }
             if (!newConfig.enabled) {
@@ -156,6 +173,7 @@ async function startAll(
     });
     manager.sessionHub.on("activity", () => statusBar?.refresh());
 
+    warnIfScanSpanClamped();
     warnPortOverlap(config);
 
     // 启动 HTTP MCP 服务器（注入运行时版本号，由 packageJSON 读取）
@@ -296,6 +314,17 @@ function startScanTimer(intervalSeconds: number): void {
 
     // 首次立即扫描
     manager.maintainConnection().then(() => statusBar?.refresh());
+}
+
+function warnIfScanSpanClamped(): void {
+    const cfg = vscode.workspace.getConfiguration("nexusMcp");
+    const a = cfg.get<number>("scanPortStart", 45000) ?? 45000;
+    const b = cfg.get<number>("scanPortEnd", 45100) ?? 45100;
+    if (scanPortSpan(a, b) > MAX_SCAN_PORT_SPAN) {
+        const msg = `UE 扫描区间超过 ${MAX_SCAN_PORT_SPAN} 个端口，已截断`;
+        logger.warn(msg);
+        void vscode.window.showWarningMessage(`Nexus MCP: ${msg}`);
+    }
 }
 
 function warnPortOverlap(config: ReturnType<typeof getConfig>): void {

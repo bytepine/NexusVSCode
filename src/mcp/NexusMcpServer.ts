@@ -30,6 +30,7 @@ export class NexusMcpHttpServer {
 
     /** 活跃会话上限：超出时按插入序淘汰最旧的非当前会话（防客户端循环重连导致内存增长）。 */
     private static readonly MAX_SESSIONS = 50;
+    private static readonly MAX_SSE_CLIENTS = 32;
 
     /** 活跃的 SSE 客户端连接，用于推送 MCP 服务端通知。 */
     private sseResponses: http.ServerResponse[] = [];
@@ -94,6 +95,9 @@ export class NexusMcpHttpServer {
             res.writeHead(404, { "Content-Type": "application/json" });
             res.end(JSON.stringify({ error: "Not Found" }));
         });
+        this.httpServer.headersTimeout = 10_000;
+        this.httpServer.keepAliveTimeout = 60_000;
+        this.httpServer.requestTimeout = 0;
 
         return new Promise<boolean>(resolve => {
             this.httpServer!.on("error", () => resolve(false));
@@ -202,6 +206,11 @@ export class NexusMcpHttpServer {
      * 每 SSE_KEEPALIVE_MS 写一行注释帧避免经反代/NAT idle 被断开。
      */
     private handleSse(res: http.ServerResponse): void {
+        if (this.sseResponses.length >= NexusMcpHttpServer.MAX_SSE_CLIENTS) {
+            res.writeHead(503, { "Content-Type": "application/json" });
+            res.end(JSON.stringify({ error: "too many SSE clients" }));
+            return;
+        }
         res.writeHead(200, {
             "Content-Type": "text/event-stream",
             "Cache-Control": "no-cache",

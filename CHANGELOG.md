@@ -7,6 +7,14 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- fix(proxy): 写门控「本会话总是允许」只记住当前 MCP 会话里的该能力
+- fix(mcp): HTTP 读头 10s / 空闲 60s；SSE 连接上限 32
+- fix(config): UE 扫描区间宽度上限 200（含端点）
+- fix(proxy): 超大响应落盘目录 0700、文件 0600；启动清残留，写入时删除超过 1 小时的旧文件
+- fix(ui): 首次配置远程 UE 时确认明文 WebSocket 会暴露 token
+
 ## [2.1.0] - 2026-09-21
 
 ### Added
