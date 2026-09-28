@@ -158,11 +158,11 @@ export async function copyMcpConfig(port: number, token: string): Promise<void> 
  */
 export async function showAndCopyAuthToken(token: string): Promise<void> {
     if (!token) {
-        vscode.window.showWarningMessage("本机鉴权 Token 尚未生成");
+        vscode.window.showWarningMessage("本机身份验证 Token 尚未生成");
         return;
     }
     const pick = await vscode.window.showInformationMessage(
-        `本机鉴权 Token：${token}`,
+        `本机身份验证 Token：${token}`,
         { modal: true },
         "复制",
     );

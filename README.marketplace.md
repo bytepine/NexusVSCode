@@ -14,7 +14,7 @@ Install `nexus-mcp-unreal-*.zip` into your project's `Plugins/NexusLink`, enable
 
 1. Set `nexusMcp.enabled` to `true` in Settings (disabled by default; the proxy then listens on `:6900`).
 2. **Copy mcp.json**: Command Palette → **Nexus MCP: 复制 MCP 客户端配置（mcp.json）** (or click the status bar). Choose Streamable HTTP, then Cursor or CodeBuddy. Paste the single snippet into that client's MCP config (`~/.cursor/mcp.json` `mcpServers` for Cursor; custom MCP for CodeBuddy / Windsurf).
-3. **Auth**: snippets already include `Authorization: Bearer <this machine's token>`. Token only: **Nexus MCP: 复制鉴权 Token（Bearer）**. Turn off `nexusMcp.requireAuth` to omit `headers`.
+3. **Auth**: snippets already include `Authorization: Bearer <this machine's token>`. Token only: **Nexus MCP: 复制身份验证 Token（Bearer）**. Turn off `nexusMcp.requireAuth` to omit `headers`.
 4. With UE running and NexusLink's MCP server on, the status bar shows the connected project name.
 
 ## Features
@@ -30,7 +30,7 @@ Install `nexus-mcp-unreal-*.zip` into your project's `Plugins/NexusLink`, enable
 - **Nexus MCP: Select UE Instance**
 - **Nexus MCP: Disconnect**
 - **Nexus MCP: Copy MCP Client Configuration** (`复制 MCP 客户端配置（mcp.json）`)
-- **Nexus MCP: Copy Auth Token** (`复制鉴权 Token（Bearer）`)
+- **Nexus MCP: Copy Auth Token** (`复制身份验证 Token（Bearer）`)
 
 Source & docs: [github.com/bytepine/NexusVSCode](https://github.com/bytepine/NexusVSCode). All network traffic is bound to `127.0.0.1`; no telemetry is collected.
 
@@ -38,7 +38,7 @@ Source & docs: [github.com/bytepine/NexusVSCode](https://github.com/bytepine/Nex
 
 **Nexus MCP** 让 VS Code / Cursor 充当 **Unreal Engine** 的 MCP 代理：本地运行 MCP 服务器（默认端口 `6900`），自动发现正在运行的 UE 编辑器/PIE 实例，并经 WebSocket 把 AI 工具调用转发给它们。AI 客户端（Cursor、CodeBuddy、Windsurf 等）只需连接一个固定端点，由扩展负责实例发现、长连接维持以及在多个 UE 实例间切换。
 
-蓝图、资产、PIE 控制、材质等引擎能力由 UE 侧的 **NexusLink** 插件提供——本扩展仅做代理，不实现游戏逻辑。
+蓝图、资产、PIE 控制、材质等引擎能力由 UE 里的 **NexusLink** 插件提供——本扩展仅做代理，不实现游戏逻辑。
 
 ## 需配合 UE 插件
 
@@ -50,7 +50,7 @@ Source & docs: [github.com/bytepine/NexusVSCode](https://github.com/bytepine/Nex
 
 1. 在 Settings 中把 `nexusMcp.enabled` 设为 `true`（默认关闭；开启后代理监听 `:6900`）。
 2. **复制 mcp.json**：命令面板 → **Nexus MCP: 复制 MCP 客户端配置（mcp.json）**（或点状态栏）。选 Streamable HTTP，再选 Cursor 或 CodeBuddy，把这一份片段贴进对应客户端（Cursor：`~/.cursor/mcp.json` 的 `mcpServers`；CodeBuddy / Windsurf：自定义 MCP）。
-3. **鉴权**：配置片段已含 `Authorization: Bearer <本机 token>`。只要 token：命令面板 **Nexus MCP: 复制鉴权 Token（Bearer）**。关闭 `nexusMcp.requireAuth` 后可不带 `headers`。Settings 里 Enabled / Require Auth 的说明也可点命令链接。
+3. **身份验证**：配置片段已含 `Authorization: Bearer <本机 token>`。只要 token：命令面板 **Nexus MCP: 复制身份验证 Token（Bearer）**。关闭 `nexusMcp.requireAuth` 后可不带 `headers`。Settings 里 Enabled / Require Auth 的说明也可点命令链接。
 4. UE 已运行且 NexusLink 的 MCP 服务器已开启时，状态栏会显示已连接的项目名。
 
 ## 功能
@@ -66,6 +66,6 @@ Source & docs: [github.com/bytepine/NexusVSCode](https://github.com/bytepine/Nex
 - **Nexus MCP: 选择 UE 实例**
 - **Nexus MCP: 断开 UE 连接**
 - **Nexus MCP: 复制 MCP 客户端配置（mcp.json）**
-- **Nexus MCP: 复制鉴权 Token（Bearer）**
+- **Nexus MCP: 复制身份验证 Token（Bearer）**
 
 源码与文档：[github.com/bytepine/NexusVSCode](https://github.com/bytepine/NexusVSCode)。所有网络通信均绑定 `127.0.0.1`，不采集任何遥测数据。

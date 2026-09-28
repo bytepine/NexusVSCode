@@ -24,9 +24,9 @@ let prevConfig = getConfig();
 let revertingConfig = false;
 
 const LAN_AUTH_WARN =
-    "局域网可达且未鉴权时，同网段主机都能控制编辑器。确定继续？不要做公网映射。";
+    "局域网可达且没做身份验证时，同网段主机都能控制编辑器。确定继续？不要做公网映射。";
 const REMOTE_PLAIN_WARN =
-    "连远程 UE 走明文 WebSocket，鉴权 token 可被同网段看到。确定继续？";
+    "连远程 UE 走明文 WebSocket，身份验证 token 可被同网段看到。确定继续？";
 
 async function getOrCreateProxyToken(context: vscode.ExtensionContext): Promise<string> {
     const seeded = await context.secrets.get(PROXY_TOKEN_SECRET);
@@ -56,7 +56,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
                             description: "选协议与客户端后复制一份片段",
                         },
                         {
-                            label: "$(key) 复制鉴权 Token",
+                            label: "$(key) 复制身份验证 Token",
                         },
                     ],
                     {
@@ -66,7 +66,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
                 );
                 if (pick?.label.includes("MCP 客户端配置")) {
                     await vscode.commands.executeCommand("nexus.copyMcpConfig");
-                } else if (pick?.label.includes("鉴权 Token")) {
+                } else if (pick?.label.includes("身份验证 Token")) {
                     await vscode.commands.executeCommand("nexus.copyAuthToken");
                 }
             }

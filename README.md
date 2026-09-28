@@ -2,7 +2,7 @@
 
 **语言 / Language**: **简体中文** · [English](README.en.md)
 
-VSCode / Cursor 端 MCP **代理**：本地 HTTP 服务器（默认 `:6900`），发现 UE 实例，经 WebSocket 把 AI 工具调用转发给 **NexusLink**。蓝图、资产、PIE 等能力由 UE 侧提供，本扩展不实现游戏逻辑。
+VSCode / Cursor 端 MCP **代理**：本地 HTTP 服务器（默认 `:6900`），发现 UE 实例，经 WebSocket 把 AI 工具调用转发给 **NexusLink**。蓝图、资产、PIE 等能力由 UE 里提供，本扩展不实现游戏逻辑。
 
 四端端口与开关层数见 [NexusLink 使用指南](https://github.com/bytepine/NexusLink/blob/master/docs/usage-guide.md)。本扩展是三层开关中的 IDE 层。本机不要与 NexusDesktop / Rider 代理同时开。
 
@@ -23,7 +23,7 @@ VSCode / Cursor 端 MCP **代理**：本地 HTTP 服务器（默认 `:6900`）�
 
 > **须开总开关**：扩展在启动后激活（`onStartupFinished`），但 MCP HTTP **默认不监听**。将 `nexusMcp.enabled` 设为 `true` 后才监听；改回 `false` 立即停止，无需重载窗口。
 
-### 1. UE 前置
+### 1. 先准备好 UE
 
 安装并启用 NexusLink，勾选 **启用 MCP 服务器**（步骤见 [usage-guide §2](https://github.com/bytepine/NexusLink/blob/master/docs/usage-guide.md)）。未勾选时扫描为空。
 
@@ -44,13 +44,13 @@ VSCode / Cursor 端 MCP **代理**：本地 HTTP 服务器（默认 `:6900`）�
 | `nexusMcp.scanPortStart` | `45000` | UE 扫描起始 |
 | `nexusMcp.scanPortEnd` | `45100` | UE 扫描结束 |
 | `nexusMcp.scanIntervalSeconds` | `5` | 定时发现间隔（秒） |
-| `nexusMcp.writeGate` | `destructive` | 写门控：`off` / `destructive`（删除、重命名、停 PIE、manage 删除类 op）/ `all` |
+| `nexusMcp.writeGate` | `destructive` | 写入前确认：`off` / `destructive`（删除、重命名、停 PIE、manage 删除类 op）/ `all` |
 | `nexusMcp.listenLan` | `false` | 勾选后 MCP 绑 `0.0.0.0`，远程 AI 用本机网卡 IP 连接 |
 | `nexusMcp.requireAuth` | `true` | AI 连本代理是否校验 Bearer；关闭后与旧版相同 |
 | `nexusMcp.extraAuthTokens` | `[]` | 其他机器 token；本机 UE 无需填 |
 | `nexusMcp.remoteUnreal` | `[]` | 远程 UE：`{ host, mcpPort, authToken? }`，不扫网段 |
 
-跨机与鉴权（开关、多 token、本机自动读文件）见 [usage-guide §1](https://github.com/bytepine/NexusLink/blob/master/docs/usage-guide.md)。
+跨机与身份验证（开关、多 token、本机自动读文件）见 [usage-guide §1](https://github.com/bytepine/NexusLink/blob/master/docs/usage-guide.md)。
 
 ### 4. 状态栏与命令
 
@@ -62,15 +62,15 @@ VSCode / Cursor 端 MCP **代理**：本地 HTTP 服务器（默认 `:6900`）�
 | `Nexus MCP: 选择 UE 实例` | 弹出列表并连接 |
 | `Nexus MCP: 断开 UE 连接` | 断开当前 WebSocket |
 | `Nexus MCP: 复制 MCP 客户端配置（mcp.json）` | 见下方步骤 |
-| `Nexus MCP: 复制鉴权 Token（Bearer）` | 见下方步骤 |
+| `Nexus MCP: 复制身份验证 Token（Bearer）` | 见下方步骤 |
 | `Nexus MCP: 暂停 Agent 转发` | 后续远端调用在代理排队，不发往 UE |
 | `Nexus MCP: 恢复 Agent 转发` | 解除暂停 |
 
-唯一实例自动连接；多实例优先 `hostKind=Editor`（旧 UE 无该字段时回落 `netRole=Editor`）。断线保留工具列表缓存；耐久读可返回带 `_proxy.degraded` 的上次快照。会话层契约见 [proxy-session.md](https://github.com/bytepine/NexusLink/blob/master/docs/proxy-session.md)。
+唯一实例自动连接；多实例优先 `hostKind=Editor`（旧 UE 无该字段时改用 `netRole=Editor`）。断线保留工具列表缓存；还能返回带 `_proxy.degraded` 的上次读取结果。会话层约定见 [proxy-session.md](https://github.com/bytepine/NexusLink/blob/master/docs/proxy-session.md)。
 
 ---
 
-## 复制 mcp.json 与鉴权
+## 复制 mcp.json 与身份验证
 
 Settings 搜索 `nexusMcp` 时，**Enabled** / **Require Auth** 说明里也有同样步骤（可点命令链接）。
 
@@ -83,19 +83,19 @@ Settings 搜索 `nexusMcp` 时，**Enabled** / **Require Auth** 说明里也有�
    - **CodeBuddy / Windsurf**：自定义 MCP 的 `Nexus` 段
 4. 可选「打开预览」核对后再贴
 
-粘贴后须将 `nexusMcp.enabled` 设为 `true`，AI 才能连上。默认 `http://127.0.0.1:6900/stream`。已启动则按实际监听端口写入；端口顺延时以状态栏 / 启动通知为准。旧版客户端选 SSE（`/sse`）。
+粘贴后须将 `nexusMcp.enabled` 设为 `true`，AI 才能连上。默认 `http://127.0.0.1:6900/stream`。已启动则按实际监听端口写入；端口自动换成下一个时以状态栏 / 启动通知为准。旧版客户端选 SSE（`/sse`）。
 
-### 复制鉴权 Token
+### 复制身份验证 Token
 
 默认 `nexusMcp.requireAuth = true`，AI 连接须带 `Authorization: Bearer <token>`。
 
 | 做法 | 说明 |
 |------|------|
 | 复制 mcp.json（推荐） | 片段已含本机 token 的 `headers`，一般不必再单独复制 |
-| 只要 token | `Ctrl+Shift+P` → **Nexus MCP: 复制鉴权 Token（Bearer）**（停用时点状态栏也可） |
-| 关掉鉴权 | 关闭 `nexusMcp.requireAuth`，mcp.json 可不带 `headers` |
+| 只要 token | `Ctrl+Shift+P` → **Nexus MCP: 复制身份验证 Token（Bearer）**（停用时点状态栏也可） |
+| 关掉身份验证 | 关闭 `nexusMcp.requireAuth`，mcp.json 可不带 `headers` |
 
-可写多个：`Bearer <tok1>, <tok2>`。本机 token 与 UE / Desktop / Rider 共用，不要填进 `extraAuthTokens`。规则见 [usage-guide §1.1](https://github.com/bytepine/NexusLink/blob/master/docs/usage-guide.md#11-鉴权)。
+可写多个：`Bearer <tok1>, <tok2>`。本机 token 与 UE / Desktop / Rider 共用，不要填进 `extraAuthTokens`。规则见 [usage-guide §1.1](https://github.com/bytepine/NexusLink/blob/master/docs/usage-guide.md#11-身份验证)。
 
 **Cursor** 完整文件示例：
 
@@ -132,7 +132,7 @@ Settings 搜索 `nexusMcp` 时，**Enabled** / **Require Auth** 说明里也有�
 
 ### 改了 UE 资产但磁盘未变化
 
-属 NexusLink 侧落盘行为。见 [usage-guide FAQ](https://github.com/bytepine/NexusLink/blob/master/docs/usage-guide.md)。
+属 NexusLink 里保存到磁盘的行为。见 [usage-guide FAQ](https://github.com/bytepine/NexusLink/blob/master/docs/usage-guide.md)。
 
 ---
 
