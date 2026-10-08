@@ -95,7 +95,7 @@ After pasting, set `nexusMcp.enabled` to `true` so the AI client can connect. De
 | Token only | `Ctrl+Shift+P` → **Nexus MCP: 复制鉴权 Token（Bearer）** (also from the status bar when disabled) |
 | Turn auth off | Set `nexusMcp.requireAuth` to false and omit `headers` |
 
-Multiple tokens: `Bearer <tok1>, <tok2>`. The machine token is shared with UE / Desktop / Rider — do not put it in `extraAuthTokens`. See [usage-guide §1.1](https://github.com/bytepine/NexusLink/blob/master/docs/usage-guide.md#11-鉴权).
+Multiple tokens: `Bearer <tok1>, <tok2>`. The machine token is shared with UE / Desktop / Rider — do not put it in `extraAuthTokens`. See [usage-guide §1.1](https://github.com/bytepine/NexusLink/blob/master/docs/usage-guide.md#11-身份验证).
 
 **Cursor** full-file example:
 
