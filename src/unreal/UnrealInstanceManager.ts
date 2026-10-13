@@ -16,6 +16,17 @@ import {
 } from "../util/lanHost";
 import { ProxyFeedbackBuffer, isMethodNotFoundError, type ProxyFeedbackEvent } from "./ProxyFeedbackBuffer";
 import { SessionHub } from "../proxy/SessionHub";
+import {
+    decideMaintain,
+    FULL_SCAN_EVERY_N_TICKS,
+    PROBE_MAX_BYTES,
+    SCAN_CONCURRENCY,
+    SCAN_PORT_END,
+    SCAN_PORT_START,
+    TOOLS_CALL_TIMEOUT_MS as PROXY_TOOLS_CALL_TIMEOUT_MS,
+    WS_KEEPALIVE_BUSY_MS,
+    WS_KEEPALIVE_IDLE_MS,
+} from "./proxyTiming";
 
 /** 优先 hostKind=Editor；旧 UE 无 hostKind 时回落 netRole=Editor。 */
 export function pickEditorInstance(found: UnrealInstanceInfo[]): UnrealInstanceInfo | undefined {
@@ -53,8 +64,8 @@ export class UnrealInstanceManager extends EventEmitter {
     /** 当前连接的 UE 实例的工具列表模式（full/starter/custom），断连时重置为 "starter"。 */
     connectedToolsListMode = "starter";
 
-    scanPortStart = 45000;
-    scanPortEnd = 45100;
+    scanPortStart = SCAN_PORT_START;
+    scanPortEnd = SCAN_PORT_END;
 
     /**
      * 用户手动指定的目标端口（-1 表示未指定，由自动发现决定）。
@@ -101,20 +112,10 @@ export class UnrealInstanceManager extends EventEmitter {
     private proxyFeedbackFlushing = false;
 
     /** tools/call 默认超时：资产搜索等 GameThread 任务常超过 5s。 */
-    static readonly TOOLS_CALL_TIMEOUT_MS = 120_000;
-
-    /** 并发端口扫描的批大小上限（对齐 Rider 固定线程池 20 上限，避免大范围扫描耗尽 fd）。 */
-    private static readonly SCAN_CONCURRENCY = 20;
+    static readonly TOOLS_CALL_TIMEOUT_MS = PROXY_TOOLS_CALL_TIMEOUT_MS;
 
     /** tools/list、nexus/instructions 等与慢工具共用长超时（旧值 3s 易与 search_asset 并发时误伤长连接）。 */
     static readonly WS_LIGHT_REQUEST_TIMEOUT_MS = UnrealInstanceManager.TOOLS_CALL_TIMEOUT_MS;
-
-    /** 空闲时 WS ping 间隔；有挂起请求时缩短，避免 UE GameThread 阻塞期间被判定空闲断连。 */
-    private static readonly WS_KEEPALIVE_IDLE_MS = 15_000;
-    private static readonly WS_KEEPALIVE_BUSY_MS = 5_000;
-
-    /** 长连接存活时，每隔 N 次维护轮才做一次全端口扫描；其余轮仅探测 connectedPort（省 100x 探测）。 */
-    private static readonly FULL_SCAN_EVERY_N_TICKS = 6;
 
     /** 维护轮倒计时：0 表示本轮应全量扫描。 */
     private fullScanCountdown = 0;
@@ -139,17 +140,20 @@ export class UnrealInstanceManager extends EventEmitter {
      * 大幅降低稳态背景探测开销（101 端口/轮 → 1 端口/轮）。
      */
     async maintainConnection(): Promise<void> {
-        if (this.isWsOpen() && this.connectedPort > 0) {
-            // 有挂起请求 = 连接正被使用，本身即存活证明，跳过探测避免 GameThread 忙时误判
-            if (this.pendingRequests.size > 0) return;
-            if (this.fullScanCountdown-- > 0) {
-                const info = await this.probeStatus(this.connectedPort, this.connectedHost);
-                if (info) return; // 心跳成功，省去全量扫描
-                // 确实失联（无挂起请求）→ 重置后转全量重扫
-                this.resetWsConnection(false);
-            }
+        const decision = decideMaintain(
+            this.isWsOpen() && this.connectedPort > 0,
+            this.pendingRequests.size,
+            this.fullScanCountdown,
+        );
+        if (decision.action === "skip") return;
+        if (decision.action === "probe") {
+            this.fullScanCountdown = decision.nextCountdown;
+            const info = await this.probeStatus(this.connectedPort, this.connectedHost);
+            if (info) return; // 心跳成功，省去全量扫描
+            // 确实失联（无挂起请求）→ 重置后转全量重扫
+            this.resetWsConnection(false);
         }
-        this.fullScanCountdown = UnrealInstanceManager.FULL_SCAN_EVERY_N_TICKS;
+        this.fullScanCountdown = FULL_SCAN_EVERY_N_TICKS;
         await this.discoverInstances();
     }
 
@@ -202,17 +206,14 @@ export class UnrealInstanceManager extends EventEmitter {
         return found;
     }
 
-    /** probeStatus 响应体读取上限，防异常端口返回超大 body 占内存。 */
-    private static readonly PROBE_MAX_BYTES = 65_536;
-
     /** 并发扫描端口范围（分片，每批 SCAN_CONCURRENCY 个，与 Rider 线程池上限对齐）。 */
     private async scanPortsParallel(): Promise<UnrealInstanceInfo[]> {
         // 防御：用户将 start/end 配置颠倒时自动交换，避免 for 循环直接不执行导致永无结果
         const [start, end] = clampScanPorts(this.scanPortStart, this.scanPortEnd);
         const found: UnrealInstanceInfo[] = [];
-        for (let port = start; port <= end; port += UnrealInstanceManager.SCAN_CONCURRENCY) {
+        for (let port = start; port <= end; port += SCAN_CONCURRENCY) {
             const batch: Promise<UnrealInstanceInfo | null>[] = [];
-            for (let p = port; p < port + UnrealInstanceManager.SCAN_CONCURRENCY && p <= end; p++) {
+            for (let p = port; p < port + SCAN_CONCURRENCY && p <= end; p++) {
                 batch.push(this.probeStatus(p, LOOPBACK_HOST));
             }
             const results = await Promise.all(batch);
@@ -275,7 +276,7 @@ export class UnrealInstanceManager extends EventEmitter {
                     res.setEncoding("utf8");
                     res.on("data", (chunk: string) => {
                         bodyBytes += Buffer.byteLength(chunk, "utf8");
-                        if (bodyBytes > UnrealInstanceManager.PROBE_MAX_BYTES) {
+                        if (bodyBytes > PROBE_MAX_BYTES) {
                             req.destroy();
                             resolve(null);
                             return;
@@ -764,8 +765,8 @@ export class UnrealInstanceManager extends EventEmitter {
         if (!socket || socket.readyState !== WebSocket.OPEN) return;
 
         const interval = this.pendingRequests.size > 0
-            ? UnrealInstanceManager.WS_KEEPALIVE_BUSY_MS
-            : UnrealInstanceManager.WS_KEEPALIVE_IDLE_MS;
+            ? WS_KEEPALIVE_BUSY_MS
+            : WS_KEEPALIVE_IDLE_MS;
 
         this.wsKeepaliveTimer = setInterval(() => {
             if (socket.readyState === WebSocket.OPEN) {

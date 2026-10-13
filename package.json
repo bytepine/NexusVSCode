@@ -152,7 +152,8 @@
     "watch": "npm run build -- --watch",
     "package": "vsce package",
     "lint": "eslint src/",
-    "test:policy": "esbuild src/proxy/index.ts --bundle --outfile=dist/sessionHub.cjs --format=cjs --platform=node && node scripts/test-session-policy.cjs"
+    "test:policy": "esbuild src/proxy/index.ts --bundle --outfile=dist/sessionHub.cjs --format=cjs --platform=node && node scripts/test-session-policy.cjs",
+    "test:timing": "esbuild src/unreal/proxyTiming.ts --bundle --outfile=dist/proxyTiming.cjs --format=cjs --platform=node && node scripts/test-proxy-timing.cjs"
   },
   "dependencies": {
     "ws": "^8.18.2"
