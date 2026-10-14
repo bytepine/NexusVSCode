@@ -17,7 +17,7 @@ export const MAX_CACHE_ENTRIES = 64;
 export const OFFLOAD_CHARS = 48_000;
 export const GATE_TIMEOUT_MS = 120_000;
 
-const DESTRUCTIVE_CAPS = new Set(["delete_asset", "rename_asset"]);
+const DESTRUCTIVE_CAPS = new Set(["DeleteAsset", "RenameAsset"]);
 const STOP_PIE = new Set(["stop", "end", "quit", "endplay", "end_play", "end-play"]);
 
 export interface CallInfo {
@@ -62,23 +62,23 @@ export function parseWriteGate(raw: string | undefined): WriteGateMode {
 
 export function isWriteCapability(cap: string): boolean {
     if (!cap) return false;
-    if (cap === "submit_feedback" || cap === "search_capabilities") return false;
-    if (cap.startsWith("get_") || cap.startsWith("list_") || cap.startsWith("search_")) return false;
+    if (cap === "SubmitFeedback" || cap === "SearchCapabilities") return false;
+    if (cap.startsWith("Get") || cap.startsWith("List") || cap.startsWith("Search")) return false;
     return true;
 }
 
 export function isDestructive(cap: string, innerArgs: Record<string, unknown>): boolean {
     if (DESTRUCTIVE_CAPS.has(cap)) return true;
-    if (cap === "control_pie") {
-        const action = String(innerArgs.action ?? "").toLowerCase();
+    if (cap === "ControlPie") {
+        const action = String(innerArgs.Action ?? "").toLowerCase();
         return STOP_PIE.has(action);
     }
-    if (cap.startsWith("manage_")) {
-        const ops = innerArgs.operations;
+    if (cap.startsWith("Manage")) {
+        const ops = innerArgs.Operations;
         if (Array.isArray(ops)) {
             return ops.some(op => {
                 if (!op || typeof op !== "object") return false;
-                const action = String((op as Record<string, unknown>).action ?? "").toLowerCase();
+                const action = String((op as Record<string, unknown>).Action ?? "").toLowerCase();
                 return action.includes("delete") || action.includes("remove") || action === "destroy";
             });
         }
@@ -93,30 +93,30 @@ export function needsGate(mode: WriteGateMode, cap: string, innerArgs: Record<st
 }
 
 export function isVolatileCap(cap: string): boolean {
-    return cap === "get_output_log"
-        || cap === "capture_viewport"
-        || cap.startsWith("list_runtime_")
-        || cap.startsWith("get_runtime_");
+    return cap === "GetOutputLog"
+        || cap === "CaptureViewport"
+        || cap.startsWith("ListRuntime")
+        || cap.startsWith("GetRuntime");
 }
 
 export function isDurableRead(cap: string): boolean {
     if (isWriteCapability(cap) || isVolatileCap(cap)) return false;
-    return cap.startsWith("search_")
-        || cap.startsWith("get_asset_")
-        || cap.startsWith("get_editor_")
-        || cap === "get_gameplay_tags"
-        || cap === "get_asset_refs"
-        || cap === "get_asset_lua_binding";
+    return cap.startsWith("Search")
+        || cap.startsWith("GetAsset")
+        || cap.startsWith("GetEditor")
+        || cap === "GetGameplayTags"
+        || cap === "GetAssetRefs"
+        || cap === "GetAssetLuaBinding";
 }
 
 export function defaultTtlMs(cap: string): number {
     if (isVolatileCap(cap)) return DEFAULT_VOLATILE_TTL_MS;
-    if (cap.startsWith("search_")) return DEFAULT_SEARCH_TTL_MS;
+    if (cap.startsWith("Search")) return DEFAULT_SEARCH_TTL_MS;
     return DEFAULT_READ_TTL_MS;
 }
 
 export function extractIdentity(args: Record<string, unknown>): string {
-    for (const key of ["assetPath", "actorName", "widgetName", "luaPath", "scriptPath"]) {
+    for (const key of ["AssetPath", "ActorName", "WidgetName", "LuaPath", "ScriptPath"]) {
         const v = args[key];
         if (typeof v === "string" && v.length > 0) return v;
     }
@@ -124,7 +124,7 @@ export function extractIdentity(args: Record<string, unknown>): string {
 }
 
 export function extractSections(args: Record<string, unknown>): string[] | null {
-    const raw = args.sections;
+    const raw = args.Sections;
     if (!Array.isArray(raw)) return null;
     const out = raw.filter((s): s is string => typeof s === "string");
     return out.length > 0 ? out : null;
@@ -133,10 +133,10 @@ export function extractSections(args: Record<string, unknown>): string[] | null 
 /** cached 覆盖 requested：含 all，或 requested 每个都在 cached 中。 */
 export function sectionsCovered(cached: string[] | null, requested: string[] | null): boolean {
     if (!cached) return false;
-    if (cached.includes("all")) return true;
+    if (cached.includes("All")) return true;
     if (!requested || requested.length === 0) return false;
     const set = new Set(cached);
-    return requested.every(s => set.has(s) || s === "all" && cached.includes("all"));
+    return requested.every(s => set.has(s) || s === "All" && cached.includes("All"));
 }
 
 export function stableStringify(value: unknown): string {
@@ -162,14 +162,14 @@ export function parseCall(toolName: string, args?: Record<string, unknown>): Cal
     let capability = toolName;
     let inner = top;
     let isBatch = false;
-    if (toolName === "call_capability") {
-        if (Array.isArray(top.calls)) {
+    if (toolName === "CallCapability") {
+        if (Array.isArray(top.Calls)) {
             isBatch = true;
-            capability = "call_capability.calls";
+            capability = "CallCapability.Calls";
             inner = top;
         } else {
-            capability = typeof top.capability === "string" ? top.capability : "";
-            inner = (top.arguments as Record<string, unknown>) ?? {};
+            capability = typeof top.Capability === "string" ? top.Capability : "";
+            inner = (top.Arguments as Record<string, unknown>) ?? {};
         }
     }
     const identity = extractIdentity(inner);
@@ -204,7 +204,7 @@ export function extractTtlMeta(result: unknown, cap: string, nowMs: number): Ttl
     const src = parsed?.obj ?? (result && typeof result === "object" ? result as Record<string, unknown> : {});
     let snapshotAtMs = nowMs;
     let snapshotAtIso = new Date(nowMs).toISOString();
-    const snap = src._snapshotAt;
+    const snap = src.SnapshotAt;
     if (typeof snap === "string") {
         const t = Date.parse(snap);
         if (!Number.isNaN(t)) {
@@ -213,7 +213,7 @@ export function extractTtlMeta(result: unknown, cap: string, nowMs: number): Ttl
         }
     }
     let ttlMs = defaultTtlMs(cap);
-    const ttlSec = src._ttl_seconds;
+    const ttlSec = src.TtlSeconds;
     if (typeof ttlSec === "number" && Number.isFinite(ttlSec) && ttlSec > 0) {
         ttlMs = ttlSec * 1000;
     }
