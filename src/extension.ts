@@ -171,7 +171,6 @@ async function startAll(
         if (pick === "本会话总是允许") return "always";
         return "deny";
     });
-    manager.sessionHub.on("activity", () => statusBar?.refresh());
 
     warnIfScanSpanClamped();
     warnPortOverlap(config);

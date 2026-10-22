@@ -54,7 +54,7 @@ Cross-machine and auth (switches, extra tokens, local file): [usage-guide §1](h
 
 ### 4. Status bar & commands
 
-The status bar shows the connected project name or disconnected; click to switch instances or copy MCP config.
+The status bar always shows the connected project name or disconnected. The tooltip also indicates when agent forwarding is paused; click to switch instances or copy MCP config.
 
 | Command (`Ctrl+Shift+P`) | Notes |
 |--------------------------|-------|

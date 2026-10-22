@@ -3,7 +3,6 @@
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
-import { EventEmitter } from "events";
 import {
     GATE_TIMEOUT_MS,
     MAX_CACHE_ENTRIES,
@@ -37,30 +36,21 @@ export interface CacheEntry {
     ttlMs: number;
 }
 
-export interface ActivityState {
-    capability: string;
-    identity: string;
-    atMs: number;
-    paused: boolean;
-}
-
 export type GatePrompter = (info: CallInfo) => Promise<GateDecision>;
 
 /**
- * 进程级会话枢纽：TTL 缓存、Pause、写门控、活动态。
+ * 进程级会话枢纽：TTL 缓存、Pause、写门控。
  * 挂在 UnrealInstanceManager 上，所有 MCP session 共享。
  */
-export class SessionHub extends EventEmitter {
+export class SessionHub {
 
     writeGate: WriteGateMode = "destructive";
     private paused = false;
     private readonly pauseWaiters: Array<() => void> = [];
     private readonly cache = new Map<string, CacheEntry>();
-    private activity: ActivityState | null = null;
     private gatePrompter: GatePrompter | null = null;
 
     constructor() {
-        super();
         purgeOffload();
     }
 
@@ -79,32 +69,6 @@ export class SessionHub extends EventEmitter {
             const waiters = this.pauseWaiters.splice(0);
             for (const w of waiters) w();
         }
-        this.emitActivity();
-    }
-
-    getActivity(): ActivityState | null {
-        if (this.paused) {
-            return { capability: "", identity: "", atMs: Date.now(), paused: true };
-        }
-        return this.activity;
-    }
-
-    beginCall(info: CallInfo): void {
-        this.activity = {
-            capability: info.capability,
-            identity: info.identity,
-            atMs: Date.now(),
-            paused: false,
-        };
-        this.emitActivity();
-    }
-
-    endCall(): void {
-        this.emitActivity();
-    }
-
-    private emitActivity(): void {
-        this.emit("activity", this.getActivity());
     }
 
     async waitIfPaused(): Promise<void> {

@@ -219,12 +219,7 @@ export class NexusMcpDispatcher {
             return makeError(id, INTERNAL_ERROR, "Write blocked by proxy gate (user denied).", deniedErrorData());
         }
 
-        hub.beginCall(callInfo);
-        try {
-            return await this.forwardRemoteCall(id, params, toolName, proxyConfig);
-        } finally {
-            hub.endCall();
-        }
+        return await this.forwardRemoteCall(id, params, toolName, proxyConfig);
     }
 
     /** 「总是允许」只记在当前 Dispatcher（一条 MCP 会话）上。 */
