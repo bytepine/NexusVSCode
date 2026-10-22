@@ -3,6 +3,7 @@
 import * as http from "http";
 import * as crypto from "crypto";
 import * as net from "net";
+import { setMaxListeners } from "events";
 import { NexusMcpDispatcher } from "./NexusMcpDispatcher";
 import type { UnrealInstanceManager } from "../unreal/UnrealInstanceManager";
 import {
@@ -23,6 +24,7 @@ const MCP_SESSION_HEADER = "mcp-session-id";
 export class NexusMcpHttpServer {
 
     private httpServer: http.Server | null = null;
+    private shutdown = new AbortController();
     private readonly manager: UnrealInstanceManager;
 
     /** HTTP 通道的 per-session Dispatcher 表。 */
@@ -57,6 +59,8 @@ export class NexusMcpHttpServer {
 
     async start(port: number, bindHost = "127.0.0.1"): Promise<boolean> {
         if (this.httpServer) return true;
+        this.shutdown = new AbortController();
+        setMaxListeners(0, this.shutdown.signal);
 
         this.httpServer = http.createServer(async (req, res) => {
             const path = (req.url ?? "/").split("?")[0];
@@ -184,8 +188,16 @@ export class NexusMcpHttpServer {
             return;
         }
 
+        const controller = new AbortController();
+        const cancel = () => controller.abort();
+        const shutdown = this.shutdown.signal;
+        shutdown.addEventListener("abort", cancel, { once: true });
+        res.once("close", cancel);
+        if (shutdown.aborted) cancel();
         try {
-            const responseJson = await dispatcher.dispatch(body);
+            const responseJson = await dispatcher.dispatch(body, controller.signal);
+            if (res.destroyed) return;
+            if (shutdown.aborted) res.setHeader("Connection", "close");
             res.setHeader(MCP_SESSION_HEADER, sessionId);
             if (!responseJson) {
                 res.writeHead(202);
@@ -195,8 +207,12 @@ export class NexusMcpHttpServer {
                 res.end(responseJson);
             }
         } catch (e) {
+            if (res.destroyed) return;
             res.writeHead(500, { "Content-Type": "application/json" });
             res.end(JSON.stringify({ error: "internal error" }));
+        } finally {
+            shutdown.removeEventListener("abort", cancel);
+            res.removeListener("close", cancel);
         }
     }
 
@@ -271,6 +287,7 @@ export class NexusMcpHttpServer {
     }
 
     async stop(): Promise<void> {
+        this.shutdown.abort();
         for (const res of this.sseResponses) {
             res.end();
         }
@@ -279,6 +296,7 @@ export class NexusMcpHttpServer {
         if (this.httpServer) {
             await new Promise<void>(resolve => {
                 this.httpServer!.close(() => resolve());
+                this.httpServer!.closeIdleConnections();
             });
             this.httpServer = null;
         }

@@ -58,7 +58,7 @@ export class NexusMcpDispatcher {
     /**
      * 处理一条 JSON-RPC 消息，返回响应 JSON 字符串。
      */
-    async dispatch(jsonLine: string): Promise<string> {
+    async dispatch(jsonLine: string, signal?: AbortSignal): Promise<string> {
         let msg: Record<string, unknown>;
         try {
             msg = JSON.parse(jsonLine);
@@ -77,6 +77,7 @@ export class NexusMcpDispatcher {
 
         const id = msg.id ?? null;
         const params = (msg.params as Record<string, unknown>) ?? undefined;
+        if (signal?.aborted) return makeError(id, -32800, "Request cancelled");
 
         switch (method) {
             case "initialize":
@@ -99,7 +100,7 @@ export class NexusMcpDispatcher {
                 if (this.state !== McpSessionState.Running) {
                     return makeError(id, INVALID_REQUEST, "Session not initialized");
                 }
-                return this.handleToolsCall(id, params);
+                return this.handleToolsCall(id, params, signal);
 
             default:
                 if (id !== null) {
@@ -194,7 +195,7 @@ export class NexusMcpDispatcher {
         return makeResult(id, result);
     }
 
-    private async handleToolsCall(id: unknown, params?: Record<string, unknown>): Promise<string> {
+    private async handleToolsCall(id: unknown, params?: Record<string, unknown>, signal?: AbortSignal): Promise<string> {
         if (!params) return makeError(id, INVALID_PARAMS, "Missing params");
         const toolName = params.name as string | undefined;
         if (!toolName) return makeError(id, INVALID_PARAMS, "Missing tool name");
@@ -213,8 +214,11 @@ export class NexusMcpDispatcher {
         }
         const callInfo = parseCall(toolName, args);
         const hub = this.unrealManager.sessionHub;
-        await hub.waitIfPaused();
+        if (!await hub.waitIfPaused(signal)) {
+            return makeError(id, -32800, "Request cancelled");
+        }
         const gate = await this.confirmWrite(callInfo);
+        if (signal?.aborted) return makeError(id, -32800, "Request cancelled");
         if (gate === "deny") {
             return makeError(id, INTERNAL_ERROR, "Write blocked by proxy gate (user denied).", deniedErrorData());
         }

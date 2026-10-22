@@ -814,6 +814,7 @@ export class UnrealInstanceManager extends EventEmitter {
     }
 
     dispose(): void {
+        this.sessionHub.dispose();
         this.disconnect();
         this.removeAllListeners();
     }

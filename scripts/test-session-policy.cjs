@@ -1,7 +1,21 @@
 // sessionPolicy / SessionHub 契约单测（与 docs/proxy-session.md 对齐）。
 const assert = require("assert");
+const fs = require("fs");
+const os = require("os");
+const path = require("path");
+const Module = require("module");
+const originalLoad = Module._load;
+Module._load = function (name, ...args) {
+    if (name === "vscode") return { workspace: { getConfiguration: () => ({ get: (key, value) => key === "requireAuth" ? false : value }) } };
+    return originalLoad.call(this, name, ...args);
+};
+const testRoot = fs.mkdtempSync(path.join(os.tmpdir(), "nexus-policy-test-"));
+os.tmpdir = () => testRoot;
+process.on("exit", () => fs.rmSync(testRoot, { recursive: true, force: true }));
 const hubMod = require("../src/proxy/index.ts");
 const { NexusMcpDispatcher } = require("../src/mcp/NexusMcpDispatcher.ts");
+const { NexusMcpHttpServer } = require("../src/mcp/NexusMcpServer.ts");
+Module._load = originalLoad;
 
 const {
     parseCall, needsGate, isWriteCapability, isDestructive, sectionsCovered,
@@ -10,6 +24,41 @@ const {
 const { SessionHub, wrapCached, wrapDegraded } = hubMod;
 
 function ok(cond, msg) { assert.ok(cond, msg); }
+
+// 已发布 2.x 的 snake_case 协议：确认、缓存、批量与 TTL 均须继续生效。
+const legacyArgs = { capability: "get_asset_blueprint", arguments: { assetPath: "/Game/BP", sections: ["all"] }, targetPort: 45000 };
+const legacyBefore = JSON.stringify(legacyArgs);
+const legacyRead = parseCall("call_capability", legacyArgs);
+assert.equal(legacyRead.identity, "/Game/BP");
+assert.equal(legacyRead.isWrite, false);
+assert.equal(needsGate("all", legacyRead.capability, legacyRead.innerArgs), false);
+assert.equal(isWriteCapability("get_asset_blueprint"), false);
+assert.equal(defaultTtlMs("get_output_log"), 8000);
+assert.equal(defaultTtlMs("search_asset"), 60000);
+assert.ok(isDurableRead("get_asset_blueprint") && !isDurableRead("list_runtime_actors"));
+assert.ok(needsGate("destructive", "delete_asset", {}));
+assert.ok(needsGate("destructive", "rename_asset", {}));
+assert.ok(needsGate("destructive", "control_pie", { action: "stop", Action: "start" }));
+assert.ok(needsGate("destructive", "ControlPie", { Action: "Stop", action: "start" }));
+assert.ok(needsGate("destructive", "manage_asset_blueprint", { operations: [{ action: "remove_node" }] }));
+const conflicting = parseCall("call_capability", { capability: "delete_asset", Capability: "GetAssetBlueprint", arguments: {} });
+assert.ok(needsGate("destructive", conflicting.capability, conflicting.innerArgs), "legacy wire fields take precedence for legacy tools");
+const legacyPayload = { content: [{ type: "text", text: JSON.stringify({ _snapshotAt: "2026-10-22T00:00:00Z", _ttl_seconds: 1 }) }] };
+const legacyHub = new SessionHub();
+legacyHub.store(legacyRead, legacyPayload, 1000);
+assert.equal(extractTtlMeta(legacyPayload, legacyRead.capability, 1000).ttlMs, 1000);
+assert.equal(legacyHub.lookupFresh(legacyRead, 1100).snapshotAt, "2026-10-22T00:00:00Z");
+const legacySubset = parseCall("call_capability", { ...legacyArgs, arguments: { assetPath: "/Game/BP", sections: ["defaults"] } });
+assert.equal(legacyHub.lookupFresh(legacySubset, 1100).kind, "section_hit");
+assert.equal(legacyHub.lookupFresh(legacyRead, 32000), null);
+assert.ok(legacyHub.lookupDegraded(legacyRead, 100000));
+const modernEquivalent = parseCall("CallCapability", { Capability: "GetAssetBlueprint", Arguments: { AssetPath: "/Game/BP", Sections: ["All"] }, targetPort: 45000 });
+assert.equal(legacyHub.lookupFresh(modernEquivalent, 1100), null, "different wire formats must not share cached response shapes");
+const legacyBatch = parseCall("call_capability", { targetPort: 45000, calls: [{ capability: "manage_asset_blueprint", arguments: { assetPath: "/Game/BP" } }] });
+assert.ok(legacyBatch.isBatch);
+legacyHub.store(legacyBatch, { content: [] }, 1200);
+assert.equal(legacyHub.lookupFresh(legacyRead, 1300), null);
+assert.equal(JSON.stringify(legacyArgs), legacyBefore, "policy parsing must not mutate wire arguments");
 
 ok(parseWriteGate("nope") === "destructive");
 ok(isWriteCapability("DeleteAsset") && !isWriteCapability("GetAssetBlueprint"));
@@ -100,10 +149,147 @@ for (const port of [45000.5, 65536, "45000"]) {
     assert.equal(parseCall("CallCapability", { ...query, targetPort: port }, "default").cacheScope, "default", "only valid integer ports select an explicit target");
 }
 
+// 批量操作即使部分失败也清理本实例；失败读不进入任何缓存。
+for (const isError of [false, true]) {
+    hub.store(a, payload, now);
+    hub.store(b, payload, now);
+    const batch = parseCall("CallCapability", { targetPort: 45000, Calls: [{ Capability: "ManageAssetBlueprint", Arguments: { AssetPath: "/Game/BP" } }] });
+    hub.store(batch, { isError, content: [] }, now + 1);
+    assert.equal(hub.lookupFresh(a, now + 2), null);
+    assert.equal(hub.lookupDegraded(a, now + 100000), null);
+    assert.ok(hub.lookupFresh(b, now + 2), "batch must keep other instances' snapshots");
+}
+const failure = { isError: true, content: [{ type: "text", text: JSON.stringify({ error: "x".repeat(50000) }) }] };
+assert.deepEqual(hub.store(a, failure, now), failure, "large errors must keep their original status and content");
+assert.equal(hub.lookupFresh(a, now + 1), null);
+assert.equal(hub.lookupDegraded(a, now + 100000), null);
+
+const large = { isError: false, content: [{ type: "text", text: JSON.stringify({ payload: "x".repeat(50000), TtlSeconds: 1 }) }] };
+const offloadCall = parseCall("GetAssetBlueprint", { AssetPath: "/Game/BP", targetPort: 45000 });
+const file = JSON.parse(hub.store(offloadCall, large, now).content[0].text).path;
+const stale = JSON.parse(hub.store(offloadCall, large, now).content[0].text).path;
+fs.utimesSync(stale, new Date(now - 7200000), new Date(now - 7200000));
+const otherHub = new SessionHub();
+assert.ok(fs.existsSync(file), "a new hub must keep active offload files");
+assert.ok(!fs.existsSync(stale), "expired nested offload files must be pruned");
+const otherFile = JSON.parse(otherHub.store(offloadCall, large, now).content[0].text).path;
+assert.notEqual(path.dirname(file), path.dirname(otherFile), "each hub owns its offload directory");
+assert.deepEqual(JSON.parse(fs.readFileSync(file, "utf8")), large);
+const oldOffloadRoot = path.join(testRoot, "nexus-mcp-offload");
+fs.mkdirSync(oldOffloadRoot);
+fs.writeFileSync(path.join(oldOffloadRoot, "old.json"), "old");
+for (const name of fs.readdirSync(oldOffloadRoot)) fs.rmSync(path.join(oldOffloadRoot, name), { recursive: true, force: true });
+assert.notEqual(path.dirname(path.dirname(file)), oldOffloadRoot);
+assert.ok(fs.existsSync(file), "old 2.x startup cleanup must not touch new payloads");
+assert.equal(hub.lookupFresh(offloadCall, now + 1001), null, "offloading must preserve original TTL metadata");
+
+async function testPauseCancellation() {
+    const paused = new SessionHub();
+    paused.setPaused(true);
+    const cancelled = new AbortController();
+    const first = paused.waitIfPaused(cancelled.signal);
+    const second = paused.waitIfPaused();
+    cancelled.abort();
+    assert.equal(await first, false);
+    paused.setPaused(false);
+    assert.equal(await second, true, "cancelling one waiter must not cancel the others");
+    paused.setPaused(true);
+    const disposed = paused.waitIfPaused();
+    paused.dispose();
+    assert.equal(await disposed, false);
+    assert.equal(await paused.waitIfPaused(), false, "disposed hubs must reject future calls");
+    assert.equal(await hub.waitIfPaused(cancelled.signal), false, "already aborted requests must never forward");
+}
+
+// 真实 HTTP 服务验证取消会释放暂停队列，关闭/重启不需要先恢复 Agent。
+async function testPausedHttpLifecycle() {
+    const http = require("http");
+    const paused = new SessionHub();
+    let forwards = 0;
+    const manager = {
+        sessionHub: paused,
+        cacheScope: "127.0.0.1:45000",
+        getProxyConfig: () => ({ localToolNames: [], initializePrefix: "test", errorMessages: {} }),
+        getUpstreamInstructions: () => "",
+        maintainConnection: async () => {},
+        ensureLongConnection: async () => true,
+        forwardToolCall: async () => { forwards++; return { status: "ok", response: { result: { content: [] } } }; },
+    };
+    const server = new NexusMcpHttpServer(manager);
+    const rpc = (method, session, params) => {
+        let request;
+        const done = new Promise((resolve, reject) => {
+            request = http.request({ host: "127.0.0.1", port: server.httpServer.address().port, path: "/stream", method: "POST",
+                headers: session ? { "Mcp-Session-Id": session } : {} }, response => {
+                let text = "";
+                response.on("data", chunk => { text += chunk; });
+                response.on("end", () => resolve({ response, json: text ? JSON.parse(text) : null }));
+            });
+            request.on("error", reject);
+            request.end(JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }));
+        });
+        return { request, done };
+    };
+    const handshake = async () => {
+        const init = await rpc("initialize").done;
+        const session = init.response.headers["mcp-session-id"];
+        await rpc("notifications/initialized", session).done;
+        return session;
+    };
+    const tool = { name: "CallCapability", arguments: { Capability: "GetAssetBlueprint", Arguments: { AssetPath: "/synthetic/BP" } } };
+    const wait = paused.waitIfPaused.bind(paused);
+    let entered;
+    let aborted;
+    paused.waitIfPaused = signal => {
+        const pending = wait(signal);
+        signal?.addEventListener("abort", () => aborted?.(), { once: true });
+        entered?.();
+        return pending;
+    };
+    const bounded = async (promise, stage) => {
+        let timer;
+        try { return await Promise.race([promise, new Promise((_, reject) => { timer = setTimeout(() => reject(new Error(`paused HTTP request did not finish: ${stage}`)), 2000); })]); }
+        finally { clearTimeout(timer); }
+    };
+    try {
+        assert.ok(await server.start(0));
+        let session = await handshake();
+        paused.setPaused(true);
+        let queued = new Promise(resolve => { entered = resolve; });
+        const cancelled = new Promise(resolve => { aborted = resolve; });
+        const disconnected = rpc("tools/call", session, tool);
+        const disconnectedResult = disconnected.done.catch(() => {});
+        await bounded(queued, "client disconnect queue");
+        disconnected.request.destroy();
+        await bounded(cancelled, "client disconnect cancellation");
+        await disconnectedResult;
+        assert.equal(forwards, 0);
+        queued = new Promise(resolve => { entered = resolve; });
+        const stopping = rpc("tools/call", session, tool);
+        await bounded(queued, "stop queue");
+        const stopped = server.stop();
+        assert.equal((await bounded(stopping.done, "cancelled response")).json.error.code, -32800);
+        await bounded(stopped, "server stop");
+        assert.equal(forwards, 0, "stopping must cancel queued work rather than forwarding it");
+        assert.ok(await server.start(0));
+        session = await handshake();
+        queued = new Promise(resolve => { entered = resolve; });
+        const resumed = rpc("tools/call", session, tool);
+        await bounded(queued, "restart queue");
+        paused.setPaused(false);
+        assert.ok((await bounded(resumed.done, "resume response")).json.result);
+        assert.equal(forwards, 1, "restart must preserve a usable hub, with cancelled work removed");
+    } finally {
+        paused.dispose();
+        await server.stop();
+    }
+}
+
 async function testDispatcherRouting() {
     let forwards = 0;
     let reconnectTo;
     let switchDuringCall;
+    let lastForwarded;
     const manager = {
         sessionHub: new SessionHub(),
         cacheScope: "127.0.0.1:45000",
@@ -117,7 +303,8 @@ async function testDispatcherRouting() {
             reconnectTo = undefined;
             return true;
         },
-        forwardToolCall: async () => {
+        forwardToolCall: async params => {
+            lastForwarded = params;
             forwards++;
             const source = manager.cacheScope;
             if (switchDuringCall) manager.cacheScope = switchDuringCall;
@@ -167,9 +354,24 @@ async function testDispatcherRouting() {
     assert.equal((await read()).source, "127.0.0.1:45004");
     assert.equal((await read()).source, "127.0.0.1:45005", "in-flight switches cannot poison the new instance cache");
     assert.equal(forwards, 6);
+    const oldParams = { name: "call_capability", arguments: { capability: "get_asset_blueprint", arguments: { assetPath: "/synthetic/BP" } } };
+    const oldRequest = params => dispatcher.dispatch(JSON.stringify({ jsonrpc: "2.0", id: 7, method: "tools/call", params })).then(JSON.parse);
+    assert.ok((await oldRequest(oldParams)).result);
+    assert.deepEqual(lastForwarded, oldParams, "old requests must be forwarded without renaming keys");
+    assert.ok((await oldRequest(oldParams)).result);
+    assert.equal(forwards, 7, "old reads must hit the cache");
+    manager.sessionHub.setGatePrompter(async () => "deny");
+    const denied = await oldRequest({ name: "call_capability", arguments: { capability: "delete_asset", arguments: { assetPath: "/synthetic/BP" } } });
+    assert.equal(denied.error?.data?.errorKind, "proxy_denied");
+    assert.equal(forwards, 7, "denied legacy writes must never forward");
+    const oldBatchParams = { name: "call_capability", arguments: { calls: [{ capability: "manage_asset_blueprint", arguments: { assetPath: "/synthetic/BP" } }] } };
+    assert.ok((await oldRequest(oldBatchParams)).result);
+    assert.deepEqual(lastForwarded, oldBatchParams);
+    await oldRequest(oldParams);
+    assert.equal(forwards, 9, "legacy batches must invalidate cached reads");
 }
 
-testDispatcherRouting().then(() => console.log("sessionPolicy and dispatcher routing OK")).catch(error => {
+Promise.all([testDispatcherRouting(), testPauseCancellation(), testPausedHttpLifecycle()]).then(() => console.log("sessionPolicy, dispatcher routing and HTTP cancellation OK")).catch(error => {
     console.error(error);
     process.exitCode = 1;
 });

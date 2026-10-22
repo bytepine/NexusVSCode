@@ -3,6 +3,7 @@
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
+import { randomUUID } from "crypto";
 import {
     GATE_TIMEOUT_MS,
     MAX_CACHE_ENTRIES,
@@ -46,12 +47,14 @@ export class SessionHub {
 
     writeGate: WriteGateMode = "destructive";
     private paused = false;
-    private readonly pauseWaiters: Array<() => void> = [];
+    private disposed = false;
+    private readonly pauseWaiters = new Set<(resumed: boolean) => void>();
     private readonly cache = new Map<string, CacheEntry>();
+    private readonly offloadDir = path.join(OFFLOAD_DIR, randomUUID());
     private gatePrompter: GatePrompter | null = null;
 
     constructor() {
-        purgeOffload();
+        pruneOffload(OFFLOAD_DIR, OFFLOAD_MAX_AGE_MS);
     }
 
     setGatePrompter(fn: GatePrompter | null): void {
@@ -63,17 +66,33 @@ export class SessionHub {
     }
 
     setPaused(value: boolean): void {
-        if (this.paused === value) return;
+        if (this.disposed || this.paused === value) return;
         this.paused = value;
         if (!value) {
-            const waiters = this.pauseWaiters.splice(0);
-            for (const w of waiters) w();
+            for (const resume of this.pauseWaiters) resume(true);
         }
     }
 
-    async waitIfPaused(): Promise<void> {
-        if (!this.paused) return;
-        await new Promise<void>(resolve => this.pauseWaiters.push(resolve));
+    async waitIfPaused(signal?: AbortSignal): Promise<boolean> {
+        if (this.disposed || signal?.aborted) return false;
+        if (!this.paused) return true;
+        return new Promise<boolean>(resolve => {
+            const finish = (resumed: boolean) => {
+                this.pauseWaiters.delete(finish);
+                signal?.removeEventListener("abort", cancel);
+                resolve(resumed);
+            };
+            const cancel = () => finish(false);
+            this.pauseWaiters.add(finish);
+            signal?.addEventListener("abort", cancel, { once: true });
+        });
+    }
+
+    dispose(): void {
+        this.disposed = true;
+        for (const cancel of this.pauseWaiters) cancel(false);
+        this.gatePrompter = null;
+        this.cache.clear();
     }
 
     async confirmIfNeeded(info: CallInfo): Promise<GateDecision> {
@@ -103,11 +122,20 @@ export class SessionHub {
 
     store(info: CallInfo, result: unknown, nowMs: number): unknown {
         let stored = structuredCloneSafe(result);
+        // 批量操作可能部分成功，先失效目标实例，避免保留旧快照。
+        if (info.isBatch) {
+            for (const [key, entry] of this.cache) {
+                if (entry.cacheScope === info.cacheScope) this.cache.delete(key);
+            }
+        } else if (info.isWrite && info.identity) {
+            this.invalidateIdentity(info.identity, info.cacheScope);
+        }
+        if ((stored as { isError?: boolean } | null)?.isError === true) return stored;
+        const ttl = extractTtlMeta(stored, info.capability, nowMs);
         if (contentTextLength(stored) > OFFLOAD_CHARS) {
             stored = this.offload(stored);
         }
         if (!info.isWrite && !info.isBatch && info.capability) {
-            const ttl = extractTtlMeta(stored, info.capability, nowMs);
             this.cache.set(info.exactKey, {
                 exactKey: info.exactKey,
                 identityKey: info.identityKey,
@@ -121,9 +149,6 @@ export class SessionHub {
                 ttlMs: ttl.ttlMs,
             });
             this.trim();
-        }
-        if (info.isWrite && info.identity) {
-            this.invalidateIdentity(info.identity, info.cacheScope);
         }
         return stored;
     }
@@ -181,10 +206,10 @@ export class SessionHub {
     }
 
     private offload(result: unknown): unknown {
-        pruneOffload(OFFLOAD_MAX_AGE_MS);
-        try { fs.mkdirSync(OFFLOAD_DIR, { recursive: true, mode: 0o700 }); } catch { /* ignore */ }
-        try { fs.chmodSync(OFFLOAD_DIR, 0o700); } catch { /* windows */ }
-        const file = path.join(OFFLOAD_DIR, `offload-${Date.now()}-${Math.random().toString(16).slice(2)}.json`);
+        pruneOffload(OFFLOAD_DIR, OFFLOAD_MAX_AGE_MS);
+        try { fs.mkdirSync(this.offloadDir, { recursive: true, mode: 0o700 }); } catch { return result; }
+        try { fs.chmodSync(this.offloadDir, 0o700); } catch { /* windows */ }
+        const file = path.join(this.offloadDir, `offload-${randomUUID()}.json`);
         const parsed = result && typeof result === "object"
             ? (result as Record<string, unknown>)
             : { value: result };
@@ -199,34 +224,26 @@ export class SessionHub {
     }
 }
 
-const OFFLOAD_DIR = path.join(os.tmpdir(), "nexus-mcp-offload");
+const OFFLOAD_DIR = path.join(os.tmpdir(), "nexus-mcp-offload-v2");
 const OFFLOAD_MAX_AGE_MS = 60 * 60 * 1000;
 
-function purgeOffload(): void {
+function pruneOffload(dir: string, maxAgeMs: number): void {
     let names: string[];
     try {
-        names = fs.readdirSync(OFFLOAD_DIR);
-    } catch {
-        return;
-    }
-    for (const name of names) {
-        try { fs.rmSync(path.join(OFFLOAD_DIR, name), { recursive: true, force: true }); } catch { /* ignore */ }
-    }
-}
-
-function pruneOffload(maxAgeMs: number): void {
-    let names: string[];
-    try {
-        names = fs.readdirSync(OFFLOAD_DIR);
+        names = fs.readdirSync(dir);
     } catch {
         return;
     }
     const cutoff = Date.now() - maxAgeMs;
     for (const name of names) {
-        const p = path.join(OFFLOAD_DIR, name);
+        const p = path.join(dir, name);
         try {
-            if (fs.statSync(p).mtimeMs < cutoff) {
-                fs.rmSync(p, { recursive: true, force: true });
+            const stat = fs.lstatSync(p);
+            if (stat.isDirectory()) {
+                pruneOffload(p, maxAgeMs);
+                fs.rmdirSync(p); // 仅删除空目录，保留其他实例的新文件。
+            } else if (stat.mtimeMs < cutoff) {
+                fs.unlinkSync(p);
             }
         } catch { /* ignore */ }
     }

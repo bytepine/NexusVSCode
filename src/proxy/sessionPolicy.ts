@@ -19,7 +19,7 @@ export const MAX_CACHE_ENTRIES = 64;
 export const OFFLOAD_CHARS = 48_000;
 export const GATE_TIMEOUT_MS = 120_000;
 
-const DESTRUCTIVE_CAPS = new Set(["DeleteAsset", "RenameAsset"]);
+const DESTRUCTIVE_CAPS = new Set(["deleteasset", "renameasset"]);
 const STOP_PIE = new Set(["stop", "end", "quit", "endplay", "end_play", "end-play"]);
 
 export interface CallInfo {
@@ -63,25 +63,39 @@ export function parseWriteGate(raw: string | undefined): WriteGateMode {
     return "destructive";
 }
 
+// 仅供本地策略判断；保留原始工具名和业务参数，原样转发给对应版本。
+function policyName(name: string): string {
+    return name.replace(/_/g, "").toLowerCase();
+}
+
+function policyField(args: Record<string, unknown>, key: string, legacy = false): unknown {
+    const camel = key[0].toLowerCase() + key.slice(1);
+    const primary = legacy ? camel : key;
+    return Object.prototype.hasOwnProperty.call(args, primary) ? args[primary] : args[legacy ? key : camel];
+}
+
 export function isWriteCapability(cap: string): boolean {
+    cap = policyName(cap);
     if (!cap) return false;
-    if (cap === "SubmitFeedback" || cap === "SearchCapabilities") return false;
-    if (cap.startsWith("Get") || cap.startsWith("List") || cap.startsWith("Search")) return false;
+    if (cap === "submitfeedback" || cap === "searchcapabilities") return false;
+    if (cap.startsWith("get") || cap.startsWith("list") || cap.startsWith("search")) return false;
     return true;
 }
 
 export function isDestructive(cap: string, innerArgs: Record<string, unknown>): boolean {
+    const legacy = cap.includes("_");
+    cap = policyName(cap);
     if (DESTRUCTIVE_CAPS.has(cap)) return true;
-    if (cap === "ControlPie") {
-        const action = String(innerArgs.Action ?? "").toLowerCase();
+    if (cap === "controlpie") {
+        const action = String(policyField(innerArgs, "Action", legacy) ?? "").toLowerCase();
         return STOP_PIE.has(action);
     }
-    if (cap.startsWith("Manage")) {
-        const ops = innerArgs.Operations;
+    if (cap.startsWith("manage")) {
+        const ops = policyField(innerArgs, "Operations", legacy);
         if (Array.isArray(ops)) {
             return ops.some(op => {
                 if (!op || typeof op !== "object") return false;
-                const action = String((op as Record<string, unknown>).Action ?? "").toLowerCase();
+                const action = String(policyField(op as Record<string, unknown>, "Action", legacy) ?? "").toLowerCase();
                 return action.includes("delete") || action.includes("remove") || action === "destroy";
             });
         }
@@ -96,38 +110,40 @@ export function needsGate(mode: WriteGateMode, cap: string, innerArgs: Record<st
 }
 
 export function isVolatileCap(cap: string): boolean {
-    return cap === "GetOutputLog"
-        || cap === "CaptureViewport"
-        || cap.startsWith("ListRuntime")
-        || cap.startsWith("GetRuntime");
+    cap = policyName(cap);
+    return cap === "getoutputlog"
+        || cap === "captureviewport"
+        || cap.startsWith("listruntime")
+        || cap.startsWith("getruntime");
 }
 
 export function isDurableRead(cap: string): boolean {
     if (isWriteCapability(cap) || isVolatileCap(cap)) return false;
-    return cap.startsWith("Search")
-        || cap.startsWith("GetAsset")
-        || cap.startsWith("GetEditor")
-        || cap === "GetGameplayTags"
-        || cap === "GetAssetRefs"
-        || cap === "GetAssetLuaBinding";
+    cap = policyName(cap);
+    return cap.startsWith("search")
+        || cap.startsWith("getasset")
+        || cap.startsWith("geteditor")
+        || cap === "getgameplaytags"
+        || cap === "getassetrefs"
+        || cap === "getassetluabinding";
 }
 
 export function defaultTtlMs(cap: string): number {
     if (isVolatileCap(cap)) return DEFAULT_VOLATILE_TTL_MS;
-    if (cap.startsWith("Search")) return DEFAULT_SEARCH_TTL_MS;
+    if (policyName(cap).startsWith("search")) return DEFAULT_SEARCH_TTL_MS;
     return DEFAULT_READ_TTL_MS;
 }
 
-export function extractIdentity(args: Record<string, unknown>): string {
+export function extractIdentity(args: Record<string, unknown>, legacy = false): string {
     for (const key of ["AssetPath", "ActorName", "WidgetName", "LuaPath", "ScriptPath"]) {
-        const v = args[key];
+        const v = policyField(args, key, legacy);
         if (typeof v === "string" && v.length > 0) return v;
     }
     return "";
 }
 
-export function extractSections(args: Record<string, unknown>): string[] | null {
-    const raw = args.Sections;
+export function extractSections(args: Record<string, unknown>, legacy = false): string[] | null {
+    const raw = policyField(args, "Sections", legacy);
     if (!Array.isArray(raw)) return null;
     const out = raw.filter((s): s is string => typeof s === "string");
     return out.length > 0 ? out : null;
@@ -136,10 +152,10 @@ export function extractSections(args: Record<string, unknown>): string[] | null 
 /** cached 覆盖 requested：含 all，或 requested 每个都在 cached 中。 */
 export function sectionsCovered(cached: string[] | null, requested: string[] | null): boolean {
     if (!cached) return false;
-    if (cached.includes("All")) return true;
+    if (cached.some(s => s.toLowerCase() === "all")) return true;
     if (!requested || requested.length === 0) return false;
     const set = new Set(cached);
-    return requested.every(s => set.has(s) || s === "All" && cached.includes("All"));
+    return requested.every(s => set.has(s));
 }
 
 export function stableStringify(value: unknown): string {
@@ -175,18 +191,21 @@ export function parseCall(toolName: string, args?: Record<string, unknown>, inst
     let capability = toolName;
     let inner = callArgs;
     let isBatch = false;
-    if (toolName === "CallCapability") {
-        if (Array.isArray(top.Calls)) {
+    if (policyName(toolName) === "callcapability") {
+        const legacy = toolName.includes("_");
+        if (Array.isArray(policyField(top, "Calls", legacy))) {
             isBatch = true;
-            capability = "CallCapability.Calls";
+            capability = `${toolName}.${legacy ? "calls" : "Calls"}`;
             inner = top;
         } else {
-            capability = typeof top.Capability === "string" ? top.Capability : "";
-            inner = (top.Arguments as Record<string, unknown>) ?? {};
+            const cap = policyField(top, "Capability", legacy);
+            capability = typeof cap === "string" ? cap : "";
+            inner = (policyField(top, "Arguments", legacy) as Record<string, unknown>) ?? {};
         }
     }
-    const identity = extractIdentity(inner);
-    const sections = extractSections(inner);
+    const legacy = capability.includes("_");
+    const identity = extractIdentity(inner, legacy);
+    const sections = extractSections(inner, legacy);
     const exactKey = JSON.stringify([cacheScope, toolName, capability, stableStringify(inner)]);
     const identityKey = JSON.stringify([cacheScope, capability, identity]);
     const write = isBatch || isWriteCapability(capability);
@@ -217,7 +236,7 @@ export function extractTtlMeta(result: unknown, cap: string, nowMs: number): Ttl
     const src = parsed?.obj ?? (result && typeof result === "object" ? result as Record<string, unknown> : {});
     let snapshotAtMs = nowMs;
     let snapshotAtIso = new Date(nowMs).toISOString();
-    const snap = src.SnapshotAt;
+    const snap = src.SnapshotAt ?? src._snapshotAt;
     if (typeof snap === "string") {
         const t = Date.parse(snap);
         if (!Number.isNaN(t)) {
@@ -226,7 +245,7 @@ export function extractTtlMeta(result: unknown, cap: string, nowMs: number): Ttl
         }
     }
     let ttlMs = defaultTtlMs(cap);
-    const ttlSec = src.TtlSeconds;
+    const ttlSec = src.TtlSeconds ?? src._ttl_seconds;
     if (typeof ttlSec === "number" && Number.isFinite(ttlSec) && ttlSec > 0) {
         ttlMs = ttlSec * 1000;
     }
