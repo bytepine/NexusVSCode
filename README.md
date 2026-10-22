@@ -66,7 +66,7 @@ VSCode / Cursor 端 MCP **代理**：本地 HTTP 服务器（默认 `:6900`）�
 | `Nexus MCP: 暂停 Agent 转发` | 后续远端调用在代理排队，不发往 UE |
 | `Nexus MCP: 恢复 Agent 转发` | 解除暂停 |
 
-唯一实例自动连接；多实例优先 `hostKind=Editor`（旧 UE 无该字段时改用 `netRole=Editor`）。断线保留工具列表缓存；还能返回带 `_proxy.degraded` 的上次读取结果。会话层约定见 [proxy-session.md](https://github.com/bytepine/NexusLink/blob/master/docs/proxy-session.md)。
+唯一实例自动连接；多实例优先 `hostKind=Editor`（旧 UE 无该字段时改用 `netRole=Editor`）。断线保留工具列表缓存；还能返回带 `_proxy.degraded` 的上次读取结果。读缓存与断线快照按 UE host/port 隔离，切换实例不会复用另一实例的数据。会话层约定见 [proxy-session.md](https://github.com/bytepine/NexusLink/blob/master/docs/proxy-session.md)。
 
 ---
 
@@ -143,6 +143,8 @@ py scripts/build_vscode.py --version <version> --output release/
 ```
 
 或 `npm ci && npm run build` 后 `npx vsce package --no-dependencies`。调试：`npm run watch`，F5 开 Extension Development Host。
+
+提交前运行 `npm run lint`（TypeScript 类型检查）、`npm run test:policy`（会话策略与多实例转发回归）和 `npm run test:timing`。CI 将这些检查作为必过步骤。
 
 GitHub Release 正文仅来自 `CHANGELOG.md`（`py scripts/extract_release_notes.py --version X.Y.Z --verify`）。tag：`nexus-vscode-vX.Y.Z`。商店详情页文案在 [README.marketplace.md](README.marketplace.md)，不与本 README 混用。
 

@@ -61,6 +61,13 @@ export class UnrealInstanceManager extends EventEmitter {
     connectedPort = -1;
     connectedHost = LOOPBACK_HOST;
 
+    /** 最近成功连接的实例；断线保留，供同实例快照降级使用。 */
+    private lastConnectedInstanceKey = "";
+
+    get cacheScope(): string {
+        return this.lastConnectedInstanceKey;
+    }
+
     /** 当前连接的 UE 实例的工具列表模式（full/starter/custom），断连时重置为 "starter"。 */
     connectedToolsListMode = "starter";
 
@@ -356,6 +363,7 @@ export class UnrealInstanceManager extends EventEmitter {
                     this.ws = socket;
                     this.connectedPort = port;
                     this.connectedHost = targetHost;
+                    this.lastConnectedInstanceKey = instanceKey(targetHost, port);
                     this.connectedToolsListMode = info.toolsListMode ?? "starter";
                     this.attachWsKeepalive(socket);
                     this.emit("connectionChanged", port);

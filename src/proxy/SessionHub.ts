@@ -27,6 +27,7 @@ import {
 export interface CacheEntry {
     exactKey: string;
     identityKey: string;
+    cacheScope: string;
     capability: string;
     identity: string;
     sections: string[] | null;
@@ -146,6 +147,7 @@ export class SessionHub extends EventEmitter {
             this.cache.set(info.exactKey, {
                 exactKey: info.exactKey,
                 identityKey: info.identityKey,
+                cacheScope: info.cacheScope,
                 capability: info.capability,
                 identity: info.identity,
                 sections: info.sections,
@@ -157,7 +159,7 @@ export class SessionHub extends EventEmitter {
             this.trim();
         }
         if (info.isWrite && info.identity) {
-            this.invalidateIdentity(info.identity);
+            this.invalidateIdentity(info.identity, info.cacheScope);
         }
         return stored;
     }
@@ -200,9 +202,9 @@ export class SessionHub extends EventEmitter {
         this.cache.set(entry.exactKey, entry);
     }
 
-    private invalidateIdentity(identity: string): void {
+    private invalidateIdentity(identity: string, cacheScope: string): void {
         for (const [k, e] of this.cache) {
-            if (e.identity === identity) this.cache.delete(k);
+            if (e.identity === identity && e.cacheScope === cacheScope) this.cache.delete(k);
         }
     }
 

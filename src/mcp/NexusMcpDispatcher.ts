@@ -1,6 +1,7 @@
 // Copyright byteyang. All Rights Reserved.
 
-import { UnrealInstanceManager, type WsRequestResult } from "../unreal/UnrealInstanceManager";
+import type { UnrealInstanceManager, WsRequestResult } from "../unreal/UnrealInstanceManager";
+import { TOOLS_CALL_TIMEOUT_MS } from "../unreal/proxyTiming";
 import { parseCall } from "../proxy/sessionPolicy";
 import { deniedErrorData, wrapCached, wrapDegraded } from "../proxy/SessionHub";
 
@@ -217,7 +218,7 @@ export class NexusMcpDispatcher {
 
         hub.beginCall(callInfo);
         try {
-            return await this.forwardRemoteCall(id, params, toolName, proxyConfig, callInfo);
+            return await this.forwardRemoteCall(id, params, toolName, proxyConfig);
         } finally {
             hub.endCall();
         }
@@ -239,9 +240,11 @@ export class NexusMcpDispatcher {
         params: Record<string, unknown>,
         toolName: string,
         proxyConfig: ReturnType<UnrealInstanceManager["getProxyConfig"]>,
-        callInfo: ReturnType<typeof parseCall>,
     ): Promise<string> {
         const hub = this.unrealManager.sessionHub;
+        const args = params.arguments as Record<string, unknown> | undefined;
+        const explicitTarget = args && typeof args.targetPort === "number" && Number.isInteger(args.targetPort) && args.targetPort >= 1024 && args.targetPort <= 65535;
+        let callInfo = parseCall(toolName, args, this.unrealManager.cacheScope);
         const now = Date.now();
         const fresh = hub.lookupFresh(callInfo, now);
         if (fresh) {
@@ -250,21 +253,22 @@ export class NexusMcpDispatcher {
 
         // 可选 targetPort：一次性路由到指定实例，不改动长连接绑定
         const forwardParams = { ...params };
-        const args = params.arguments as Record<string, unknown> | undefined;
         let outcome: WsRequestResult;
-        if (args && typeof args.targetPort === "number" && Number.isInteger(args.targetPort) && args.targetPort >= 1024) {
-            const targetPort = args.targetPort;
+        if (explicitTarget) {
+            const targetPort = args.targetPort as number;
             const targetHost = typeof args.targetHost === "string" ? args.targetHost : undefined;
             const { targetPort: _drop, targetHost: _dropHost, ...restArgs } = args;
             forwardParams.arguments = restArgs;
             outcome = await this.unrealManager.forwardToolCallToPort(
-                targetPort, forwardParams, UnrealInstanceManager.TOOLS_CALL_TIMEOUT_MS, targetHost,
+                targetPort, forwardParams, TOOLS_CALL_TIMEOUT_MS, targetHost,
             );
         } else {
             await this.unrealManager.ensureLongConnection();
+            callInfo = parseCall(toolName, args, this.unrealManager.cacheScope);
             outcome = await this.unrealManager.forwardToolCall(forwardParams);
             if (outcome.status === "disconnected") {
                 if (await this.unrealManager.ensureLongConnection()) {
+                    callInfo = parseCall(toolName, args, this.unrealManager.cacheScope);
                     outcome = await this.unrealManager.forwardToolCall(forwardParams);
                 }
             }
@@ -285,7 +289,7 @@ export class NexusMcpDispatcher {
             });
         }
         if (outcome.status === "timeout") {
-            const sec = Math.round(UnrealInstanceManager.TOOLS_CALL_TIMEOUT_MS / 1000);
+            const sec = Math.round(TOOLS_CALL_TIMEOUT_MS / 1000);
             const message = `UE request timed out after ${sec}s. ${proxyConfig.errorMessages.timeoutHint}`;
             this.unrealManager.proxyFeedbackBuffer.enqueue({
                 category: "proxy_timeout",
@@ -297,6 +301,10 @@ export class NexusMcpDispatcher {
         }
         const response = outcome.response;
         if (response.result !== undefined) {
+            // 调用等待期间切换了长连接时，不能把旧实例响应存入新实例缓存。
+            if (!explicitTarget && callInfo.cacheScope !== this.unrealManager.cacheScope) {
+                return makeResult(id, response.result as Record<string, unknown>);
+            }
             const stored = hub.store(callInfo, response.result, now);
             return makeResult(id, stored as Record<string, unknown>);
         }

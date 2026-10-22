@@ -7,6 +7,11 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- fix(proxy): 读缓存、section 缓存与断线快照按 UE host/port 隔离；显式目标与当前连接采用相同作用域，路由端口须为 1024–65535 的整数，重连或调用期间切换实例不会污染其他实例缓存；写入仅失效对应实例的资产快照
+- fix(test): 会话策略测试对齐 PascalCase 契约，增加多实例转发回归；CI 强制运行 TypeScript 类型检查、策略和时序测试，修正 Node 网络地址 family 的类型兼容
+
 ## [2.1.1] - 2026-10-08
 
 ### Changed

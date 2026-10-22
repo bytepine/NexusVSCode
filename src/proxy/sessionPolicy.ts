@@ -5,6 +5,8 @@
  * 无 VSCode / 网络依赖，可供单测直接 import。
  */
 
+import { instanceKey } from "../util/lanHost";
+
 export type WriteGateMode = "off" | "destructive" | "all";
 export type CacheKind = "hit" | "section_hit";
 export type GateDecision = "allow" | "deny" | "always";
@@ -28,6 +30,7 @@ export interface CallInfo {
     sections: string[] | null;
     exactKey: string;
     identityKey: string;
+    cacheScope: string;
     isWrite: boolean;
     isBatch: boolean;
 }
@@ -149,7 +152,6 @@ function sortValue(value: unknown): unknown {
         const obj = value as Record<string, unknown>;
         const out: Record<string, unknown> = {};
         for (const k of Object.keys(obj).sort()) {
-            if (k === "targetPort") continue;
             out[k] = sortValue(obj[k]);
         }
         return out;
@@ -157,10 +159,16 @@ function sortValue(value: unknown): unknown {
     return value;
 }
 
-export function parseCall(toolName: string, args?: Record<string, unknown>): CallInfo {
+export function parseCall(toolName: string, args?: Record<string, unknown>, instanceScope = ""): CallInfo {
     const top = args ?? {};
+    const explicitTarget = typeof top.targetPort === "number" && Number.isInteger(top.targetPort) && top.targetPort >= 1024 && top.targetPort <= 65535;
+    const cacheScope = explicitTarget
+        ? instanceKey(typeof top.targetHost === "string" ? top.targetHost : undefined, top.targetPort as number)
+        : instanceScope;
+    // 只剥离顶层路由字段；能力参数中的同名字段仍参与缓存键。
+    const { targetPort: _port, targetHost: _host, ...callArgs } = top;
     let capability = toolName;
-    let inner = top;
+    let inner = callArgs;
     let isBatch = false;
     if (toolName === "CallCapability") {
         if (Array.isArray(top.Calls)) {
@@ -174,10 +182,10 @@ export function parseCall(toolName: string, args?: Record<string, unknown>): Cal
     }
     const identity = extractIdentity(inner);
     const sections = extractSections(inner);
-    const exactKey = `${toolName}|${capability}|${stableStringify(inner)}`;
-    const identityKey = `${capability}|${identity}`;
+    const exactKey = JSON.stringify([cacheScope, toolName, capability, stableStringify(inner)]);
+    const identityKey = JSON.stringify([cacheScope, capability, identity]);
     const write = isBatch || isWriteCapability(capability);
-    return { toolName, capability, innerArgs: inner, identity, sections, exactKey, identityKey, isWrite: write, isBatch };
+    return { toolName, capability, innerArgs: inner, identity, sections, exactKey, identityKey, cacheScope, isWrite: write, isBatch };
 }
 
 export function parseJsonObject(text: string): Record<string, unknown> | null {

@@ -29,6 +29,10 @@ jobs:
       - name: Build
         run: npm run build
 
-      - name: Lint
+      - name: Type check
         run: npm run lint
-        continue-on-error: true
+
+      - name: Proxy contract tests
+        run: |
+          npm run test:policy
+          npm run test:timing

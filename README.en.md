@@ -66,7 +66,7 @@ The status bar shows the connected project name or disconnected; click to switch
 | `Nexus MCP: Pause Agent Forwarding` | Queue remote calls at the proxy; do not send to UE |
 | `Nexus MCP: Resume Agent Forwarding` | Unpause |
 
-A single instance auto-connects; multiple instances prefer `hostKind=Editor` (legacy UE without that field falls back to `netRole=Editor`). Tool-list cache is kept across disconnects. Durable reads may return a snapshot with `_proxy.degraded`. Session contract: [proxy-session.md](https://github.com/bytepine/NexusLink/blob/master/docs/proxy-session.md).
+A single instance auto-connects; multiple instances prefer `hostKind=Editor` (legacy UE without that field falls back to `netRole=Editor`). Tool-list cache is kept across disconnects. Durable reads may return a snapshot with `_proxy.degraded`. Read caches and disconnected snapshots are isolated by UE host/port, so switching instances cannot reuse another instance's data. Session contract: [proxy-session.md](https://github.com/bytepine/NexusLink/blob/master/docs/proxy-session.md).
 
 ---
 
@@ -143,6 +143,8 @@ py scripts/build_vscode.py --version <version> --output release/
 ```
 
 Or `npm ci && npm run build` then `npx vsce package --no-dependencies`. Debug: `npm run watch`, F5 for Extension Development Host.
+
+Before submitting, run `npm run lint` (TypeScript type checking), `npm run test:policy` (session policy and multi-instance routing), and `npm run test:timing`. All three are required CI checks.
 
 GitHub Release notes come only from `CHANGELOG.md` (`py scripts/extract_release_notes.py --version X.Y.Z --verify`). Tag: `nexus-vscode-vX.Y.Z`. Marketplace listing copy lives in [README.marketplace.md](README.marketplace.md), not this README.
 

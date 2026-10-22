@@ -151,8 +151,8 @@
     "build": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --sourcemap",
     "watch": "npm run build -- --watch",
     "package": "vsce package",
-    "lint": "eslint src/",
-    "test:policy": "esbuild src/proxy/index.ts --bundle --outfile=dist/sessionHub.cjs --format=cjs --platform=node && node scripts/test-session-policy.cjs",
+    "lint": "tsc --noEmit",
+    "test:policy": "esbuild scripts/test-session-policy.cjs --bundle --outfile=dist/test-session-policy.cjs --format=cjs --platform=node && node dist/test-session-policy.cjs",
     "test:timing": "esbuild src/unreal/proxyTiming.ts --bundle --outfile=dist/proxyTiming.cjs --format=cjs --platform=node && node scripts/test-proxy-timing.cjs"
   },
   "dependencies": {

@@ -65,7 +65,7 @@ export function listLanIPv4(): LanIPv4[] {
             continue;
         }
         for (const a of addrs) {
-            const family = a.family === "IPv4" || a.family === 4;
+            const family = a.family === "IPv4" || String(a.family) === "4";
             if (!family || a.internal || isLinkLocalIPv4(a.address)) {
                 continue;
             }
