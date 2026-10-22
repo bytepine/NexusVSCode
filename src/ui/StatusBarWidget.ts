@@ -48,7 +48,7 @@ export class StatusBarWidget implements vscode.Disposable {
         const mgr = this.manager;
         if (!mgr) {
             this.item.text = "$(plug) NexusLink: 已停用";
-            this.item.tooltip = "Nexus MCP 已在设置中禁用；点击可复制 MCP 配置";
+            this.item.tooltip = "Nexus MCP 已在设置中禁用；点击可复制 MCP 配置 / 打开日志";
             return;
         }
         if (mgr.connectedPort > 0) {
@@ -84,7 +84,7 @@ export class StatusBarWidget implements vscode.Disposable {
         if (this.manager?.sessionHub.isPaused()) {
             lines.push("Agent 转发已暂停；命令面板「恢复 Agent 转发」继续");
         }
-        lines.push("点击管理 UE 实例 / 复制 MCP 配置");
+        lines.push("点击管理 UE 实例 / 复制 MCP 配置 / 打开日志");
         return lines.join("\n");
     }
 

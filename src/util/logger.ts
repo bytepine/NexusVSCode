@@ -1,6 +1,7 @@
 // Copyright byteyang. All Rights Reserved.
 
 import * as vscode from "vscode";
+import { randomUUID } from "crypto";
 
 /**
  * 扩展日志单例，封装 VSCode LogOutputChannel 并由编辑器管理日志文件。
@@ -12,7 +13,9 @@ class NexusLogger implements vscode.Disposable {
 
     init(context: vscode.ExtensionContext): void {
         // 使用原生日志通道，保留输出面板的同时由 VSCode 管理日志文件与滚动。
-        this.channel = vscode.window.createOutputChannel("Nexus MCP", { log: true });
+        // 通道名称决定原生日志文件名；重载扩展时也新建，避免拼接到上一次启动。
+        const name = `Nexus MCP (${new Date().toISOString()}-${randomUUID().slice(0, 8)})`;
+        this.channel = vscode.window.createOutputChannel(name, { log: true });
         context.subscriptions.push(this);
     }
 
@@ -35,6 +38,10 @@ class NexusLogger implements vscode.Disposable {
     error(msg: string, err?: unknown): void {
         const detail = err instanceof Error ? ` — ${err.message}` : err != null ? ` — ${String(err)}` : "";
         this.channel?.error(`${msg}${detail}`);
+    }
+
+    show(): void {
+        this.channel?.show(true);
     }
 
     dispose(): void {

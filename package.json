@@ -118,6 +118,10 @@
     },
     "commands": [
       {
+        "command": "nexus.showLog",
+        "title": "Nexus MCP: 打开日志"
+      },
+      {
         "command": "nexus.refreshInstances",
         "title": "Nexus MCP: 刷新 UE 实例"
       },

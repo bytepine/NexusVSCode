@@ -132,7 +132,7 @@ Confirm `nexusMcp.enabled` is `true`, UE MCP is on, the status bar shows a proje
 
 ### Logs
 
-Open **View → Output → Nexus MCP**. The VSCode/Cursor native log channel persists and rotates these logs; use `Developer: Open Logs Folder` to retrieve the Nexus MCP log file.
+Click **Nexus status bar → 打开日志 (Open log)** or run **Nexus MCP: 打开日志** in the command palette to reveal the current startup's log channel, including when the proxy is disabled. Each extension startup/reload creates a new `Nexus MCP (...)` channel and file named with its startup time; old logs are preserved. VSCode/Cursor handles persistence and rotation. Use `Developer: Open Logs Folder` to retrieve the matching Nexus MCP log file.
 
 Default INFO logs include client versions, session creation and initialization, invalid or evicted sessions, HTTP rejections, SSE connections, call start/completion/duration/failure, server stop reasons and connection recovery. Match sessions by their hashed `session` value and calls by `request` within one server run. `missing_session` / `unknown_session` distinguish absent headers from unknown IDs; `session_limit` / `waiting_for_initialize` identify eviction reasons. Tokens, complete session IDs, tool arguments and response bodies are omitted.
 

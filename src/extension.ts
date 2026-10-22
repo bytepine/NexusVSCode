@@ -38,6 +38,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     logger.init(context);
     logger.info(`Nexus MCP 启动 version=${logText((context.extension.packageJSON as Record<string, unknown>).version)} pid=${process.pid} platform=${process.platform}/${process.arch}`);
     context.subscriptions.push(
+        vscode.commands.registerCommand("nexus.showLog", () => logger.show()),
         vscode.commands.registerCommand("nexus.copyAuthToken", async () => {
             const token = await getOrCreateProxyToken(context);
             await showAndCopyAuthToken(token);
@@ -60,6 +61,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
                         {
                             label: "$(key) 复制身份验证 Token",
                         },
+                        {
+                            label: "$(output) 打开日志",
+                        },
                     ],
                     {
                         title: "Nexus MCP 已停用",
@@ -70,6 +74,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
                     await vscode.commands.executeCommand("nexus.copyMcpConfig");
                 } else if (pick?.label.includes("身份验证 Token")) {
                     await vscode.commands.executeCommand("nexus.copyAuthToken");
+                } else if (pick?.label.includes("打开日志")) {
+                    await vscode.commands.executeCommand("nexus.showLog");
                 }
             }
             statusBar?.refresh();

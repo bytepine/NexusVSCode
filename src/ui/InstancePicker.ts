@@ -40,6 +40,10 @@ export async function showInstancePicker(manager: UnrealInstanceManager): Promis
         label: "$(sync) 刷新搜索",
         description: "",
     });
+    items.push({
+        label: "$(output) 打开日志",
+        description: "Nexus MCP",
+    });
 
     const selected = await vscode.window.showQuickPick(items, {
         title: instances.length > 0
@@ -49,6 +53,11 @@ export async function showInstancePicker(manager: UnrealInstanceManager): Promis
     });
 
     if (!selected) return;
+
+    if (selected.label.includes("打开日志")) {
+        await vscode.commands.executeCommand("nexus.showLog");
+        return;
+    }
 
     if (selected.label.includes("复制 MCP 客户端配置")) {
         await vscode.commands.executeCommand("nexus.copyMcpConfig");

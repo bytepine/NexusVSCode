@@ -132,7 +132,7 @@ Settings 搜索 `nexusMcp` 时，**Enabled** / **Require Auth** 说明里也有�
 
 ### 查看日志
 
-打开 **视图 → 输出 → Nexus MCP**。日志使用 VSCode/Cursor 原生日志通道落盘与滚动；可通过命令面板 `Developer: Open Logs Folder` 获取日志目录中的 Nexus MCP 日志文件。
+点击 **Nexus 状态栏菜单 → 打开日志**，或运行命令面板 **Nexus MCP: 打开日志**，会打开当前启动的日志通道，代理停用时也可使用。每次扩展启动（包括重载）新建带启动时间的 `Nexus MCP (...)` 通道和独立日志文件，旧日志保留。VSCode/Cursor 管理文件落盘与滚动；通过命令面板 `Developer: Open Logs Folder` 可获取对应启动时间的 Nexus MCP 日志文件。
 
 默认 INFO 即记录客户端版本、会话创建与握手、失效或淘汰、HTTP 拒绝、SSE 通断、调用开始/完成/耗时与失败，以及服务器停止原因和连接恢复。`session` 是会话摘要，`request` 是本次服务器运行内的请求编号；`missing_session` / `unknown_session` 区分缺少 ID 与 ID 已不存在，`session_limit` / `waiting_for_initialize` 标明清理原因。Token、完整会话 ID、工具参数和响应正文不写入日志。
 

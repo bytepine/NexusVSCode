@@ -5,13 +5,16 @@ const Module = require("module");
 const logs = [];
 const token = "ab".repeat(32);
 let logOptions;
+const channelNames = [];
+let shown = false;
 const originalLoad = Module._load;
 Module._load = function (name, ...args) {
     if (name === "vscode") return {
         workspace: { getConfiguration: () => ({ get: (_key, fallback) => fallback }) },
-        window: { createOutputChannel: (_name, options) => {
+        window: { createOutputChannel: (name, options) => {
+            channelNames.push(name);
             logOptions = options;
-            return { info: line => logs.push(`[INFO] ${line}`), warn: line => logs.push(`[WARN] ${line}`), error: line => logs.push(`[ERROR] ${line}`), dispose() {} };
+            return { info: line => logs.push(`[INFO] ${line}`), warn: line => logs.push(`[WARN] ${line}`), error: line => logs.push(`[ERROR] ${line}`), show: () => { shown = true; }, dispose() {} };
         } },
     };
     return originalLoad.call(this, name, ...args);
@@ -24,6 +27,12 @@ Module._load = originalLoad;
 
 async function main() {
     logger.init({ subscriptions: [] });
+    logger.show();
+    assert.ok(shown, "open log must reveal the current startup's channel");
+    logger.dispose();
+    logger.init({ subscriptions: [] });
+    assert.notEqual(channelNames[0], channelNames[1], "each startup must use a distinct native log file name");
+    assert.ok(channelNames.every(name => name.startsWith("Nexus MCP (")));
     assert.deepEqual(logOptions, { log: true }, "logs must use VSCode's persistent log channel");
     assert.equal(sessionLogId("abc"), "ba7816bf8f01");
     assert.equal(sessionLogId(""), "none");
