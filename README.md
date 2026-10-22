@@ -112,7 +112,7 @@ Settings 搜索 `nexusMcp` 时，**Enabled** / **Require Auth** 说明里也有�
 }
 ```
 
-已连接时 `tools/list` 合并 UE 工具。多实例并发可在 `arguments` 中带 `targetPort`。
+已连接时 `tools/list` 合并 UE 工具。多实例并发可在 `arguments` 中带 `targetPort`，须为 1024–65535 的整数；非法显式端口返回 `-32602`，不会转发到当前实例或返回缓存。
 
 ---
 

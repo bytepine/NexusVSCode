@@ -146,6 +146,19 @@ async function testDispatcherRouting() {
     manager.cacheScope = "127.0.0.1:45001";
     assert.equal((await read()).source, manager.cacheScope);
     assert.equal(forwards, 3, "default connection reuses only its own explicit-route snapshot");
+    let prompts = 0;
+    manager.sessionHub.setGatePrompter(async () => { prompts++; return "allow"; });
+    for (const targetPort of [-1, 0, 1023, 65536, 45000.5, "45000", null, true]) {
+        for (const Capability of ["GetAssetBlueprint", "ManageAssetBlueprint", "DeleteAsset"]) {
+            const response = JSON.parse(await dispatcher.dispatch(JSON.stringify({
+                jsonrpc: "2.0", id: 3, method: "tools/call",
+                params: { name: "CallCapability", arguments: { ...query, Capability, targetPort } },
+            })));
+            assert.equal(response.error?.code, -32602, "invalid explicit target must be rejected, even with a cached default read");
+        }
+    }
+    assert.equal(prompts, 0, "invalid targets must not prompt for writes");
+    assert.equal(forwards, 3, "invalid targets must never forward to the default instance");
     manager.cacheScope = "127.0.0.1:45002";
     reconnectTo = "127.0.0.1:45003";
     assert.equal((await read()).source, "127.0.0.1:45003");

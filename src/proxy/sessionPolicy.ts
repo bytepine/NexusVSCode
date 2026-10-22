@@ -159,11 +159,16 @@ function sortValue(value: unknown): unknown {
     return value;
 }
 
+export function explicitTargetPort(args?: Record<string, unknown>): number | undefined {
+    const port = args?.targetPort;
+    return typeof port === "number" && Number.isInteger(port) && port >= 1024 && port <= 65535 ? port : undefined;
+}
+
 export function parseCall(toolName: string, args?: Record<string, unknown>, instanceScope = ""): CallInfo {
     const top = args ?? {};
-    const explicitTarget = typeof top.targetPort === "number" && Number.isInteger(top.targetPort) && top.targetPort >= 1024 && top.targetPort <= 65535;
-    const cacheScope = explicitTarget
-        ? instanceKey(typeof top.targetHost === "string" ? top.targetHost : undefined, top.targetPort as number)
+    const targetPort = explicitTargetPort(top);
+    const cacheScope = targetPort !== undefined
+        ? instanceKey(typeof top.targetHost === "string" ? top.targetHost : undefined, targetPort)
         : instanceScope;
     // 只剥离顶层路由字段；能力参数中的同名字段仍参与缓存键。
     const { targetPort: _port, targetHost: _host, ...callArgs } = top;

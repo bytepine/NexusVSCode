@@ -2,7 +2,7 @@
 
 import type { UnrealInstanceManager, WsRequestResult } from "../unreal/UnrealInstanceManager";
 import { TOOLS_CALL_TIMEOUT_MS } from "../unreal/proxyTiming";
-import { parseCall } from "../proxy/sessionPolicy";
+import { explicitTargetPort, parseCall } from "../proxy/sessionPolicy";
 import { deniedErrorData, wrapCached, wrapDegraded } from "../proxy/SessionHub";
 
 /**
@@ -208,6 +208,9 @@ export class NexusMcpDispatcher {
         }
 
         const args = params.arguments as Record<string, unknown> | undefined;
+        if (args && Object.prototype.hasOwnProperty.call(args, "targetPort") && explicitTargetPort(args) === undefined) {
+            return makeError(id, INVALID_PARAMS, "Invalid targetPort: expected an integer from 1024 to 65535.");
+        }
         const callInfo = parseCall(toolName, args);
         const hub = this.unrealManager.sessionHub;
         await hub.waitIfPaused();
@@ -243,7 +246,7 @@ export class NexusMcpDispatcher {
     ): Promise<string> {
         const hub = this.unrealManager.sessionHub;
         const args = params.arguments as Record<string, unknown> | undefined;
-        const explicitTarget = args && typeof args.targetPort === "number" && Number.isInteger(args.targetPort) && args.targetPort >= 1024 && args.targetPort <= 65535;
+        const targetPort = explicitTargetPort(args);
         let callInfo = parseCall(toolName, args, this.unrealManager.cacheScope);
         const now = Date.now();
         const fresh = hub.lookupFresh(callInfo, now);
@@ -254,10 +257,9 @@ export class NexusMcpDispatcher {
         // 可选 targetPort：一次性路由到指定实例，不改动长连接绑定
         const forwardParams = { ...params };
         let outcome: WsRequestResult;
-        if (explicitTarget) {
-            const targetPort = args.targetPort as number;
-            const targetHost = typeof args.targetHost === "string" ? args.targetHost : undefined;
-            const { targetPort: _drop, targetHost: _dropHost, ...restArgs } = args;
+        if (targetPort !== undefined) {
+            const targetHost = typeof args?.targetHost === "string" ? args.targetHost : undefined;
+            const { targetPort: _drop, targetHost: _dropHost, ...restArgs } = args ?? {};
             forwardParams.arguments = restArgs;
             outcome = await this.unrealManager.forwardToolCallToPort(
                 targetPort, forwardParams, TOOLS_CALL_TIMEOUT_MS, targetHost,
@@ -302,7 +304,7 @@ export class NexusMcpDispatcher {
         const response = outcome.response;
         if (response.result !== undefined) {
             // 调用等待期间切换了长连接时，不能把旧实例响应存入新实例缓存。
-            if (!explicitTarget && callInfo.cacheScope !== this.unrealManager.cacheScope) {
+            if (targetPort === undefined && callInfo.cacheScope !== this.unrealManager.cacheScope) {
                 return makeResult(id, response.result as Record<string, unknown>);
             }
             const stored = hub.store(callInfo, response.result, now);
