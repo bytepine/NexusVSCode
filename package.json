@@ -153,7 +153,8 @@
     "package": "vsce package",
     "lint": "tsc --noEmit",
     "test:policy": "esbuild scripts/test-session-policy.cjs --bundle --outfile=dist/test-session-policy.cjs --external:vscode --format=cjs --platform=node && node dist/test-session-policy.cjs",
-    "test:timing": "esbuild src/unreal/proxyTiming.ts --bundle --outfile=dist/proxyTiming.cjs --format=cjs --platform=node && node scripts/test-proxy-timing.cjs"
+    "test:timing": "esbuild src/unreal/proxyTiming.ts --bundle --outfile=dist/proxyTiming.cjs --format=cjs --platform=node && node scripts/test-proxy-timing.cjs",
+    "test:diagnostics": "esbuild scripts/test-diagnostics.cjs --bundle --outfile=dist/test-diagnostics.cjs --external:vscode --format=cjs --platform=node && node dist/test-diagnostics.cjs"
   },
   "dependencies": {
     "ws": "^8.18.2"

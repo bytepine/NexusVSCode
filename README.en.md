@@ -132,7 +132,11 @@ Confirm `nexusMcp.enabled` is `true`, UE MCP is on, the status bar shows a proje
 
 ### Logs
 
-**Help → Toggle Developer Tools** → Console, search `Nexus MCP`.
+Open **View → Output → Nexus MCP**. The VSCode/Cursor native log channel persists and rotates these logs; use `Developer: Open Logs Folder` to retrieve the Nexus MCP log file.
+
+Default INFO logs include client versions, session creation and initialization, invalid or evicted sessions, HTTP rejections, SSE connections, call start/completion/duration/failure, server stop reasons and connection recovery. Match sessions by their hashed `session` value and calls by `request` within one server run. `missing_session` / `unknown_session` distinguish absent headers from unknown IDs; `session_limit` / `waiting_for_initialize` identify eviction reasons. Tokens, complete session IDs, tool arguments and response bodies are omitted.
+
+For disconnect reports, include the incident time, AI client name/version, client log and Nexus MCP logs covering that time. Restarting the server invalidates sessions; clients must initialize again, which can be triggered by toggling the MCP connection. Set `nexusMcp.logLevel=debug` for extra diagnostics; routine scans and heartbeats do not produce INFO noise.
 
 ### Asset edits not on disk
 
@@ -148,7 +152,7 @@ py scripts/build_vscode.py --version <version> --output release/
 
 Or `npm ci && npm run build` then `npx vsce package --no-dependencies`. Debug: `npm run watch`, F5 for Extension Development Host.
 
-Before submitting, run `npm run lint` (TypeScript type checking), `npm run test:policy` (session policy and multi-instance routing), and `npm run test:timing`. All three are required CI checks.
+Before submitting, run `npm run lint` (TypeScript type checking), `npm run test:policy` (session policy and multi-instance routing), `npm run test:timing`, and `npm run test:diagnostics` (HTTP INFO logging and redaction). All four are required CI checks.
 
 GitHub Release notes come only from `CHANGELOG.md` (`py scripts/extract_release_notes.py --version X.Y.Z --verify`). Tag: `nexus-vscode-vX.Y.Z`. Marketplace listing copy lives in [README.marketplace.md](README.marketplace.md), not this README.
 

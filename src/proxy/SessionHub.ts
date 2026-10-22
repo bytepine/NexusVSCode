@@ -4,6 +4,8 @@ import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
 import { randomUUID } from "crypto";
+import { logger } from "../util/logger";
+import { logText } from "../util/diagnostics";
 import {
     GATE_TIMEOUT_MS,
     MAX_CACHE_ENTRIES,
@@ -68,6 +70,7 @@ export class SessionHub {
     setPaused(value: boolean): void {
         if (this.disposed || this.paused === value) return;
         this.paused = value;
+        logger.info(`Agent 转发暂停状态 paused=${value}`);
         if (!value) {
             for (const resume of this.pauseWaiters) resume(true);
         }
@@ -98,13 +101,18 @@ export class SessionHub {
     async confirmIfNeeded(info: CallInfo): Promise<GateDecision> {
         if (!needsGate(this.writeGate, info.capability, info.innerArgs)) return "allow";
         if (!this.gatePrompter) return "allow";
+        logger.info(`等待写入确认 capability=${logText(info.capability)} timeout_ms=${GATE_TIMEOUT_MS}`);
         // 用户先做出选择时必须清掉定时器，否则挂起的 timer 会拖住扩展宿主退出
         let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
         const timer = new Promise<GateDecision>(resolve => {
-            timeoutHandle = setTimeout(() => resolve("deny"), GATE_TIMEOUT_MS);
+            timeoutHandle = setTimeout(() => {
+                logger.warn(`写入确认超时 capability=${logText(info.capability)} timeout_ms=${GATE_TIMEOUT_MS}`);
+                resolve("deny");
+            }, GATE_TIMEOUT_MS);
         });
         const decision = await Promise.race([this.gatePrompter(info), timer])
             .finally(() => clearTimeout(timeoutHandle));
+        logger.info(`写入确认结束 capability=${logText(info.capability)} decision=${decision}`);
         return decision;
     }
 
@@ -207,16 +215,23 @@ export class SessionHub {
 
     private offload(result: unknown): unknown {
         pruneOffload(OFFLOAD_DIR, OFFLOAD_MAX_AGE_MS);
-        try { fs.mkdirSync(this.offloadDir, { recursive: true, mode: 0o700 }); } catch { return result; }
+        try { fs.mkdirSync(this.offloadDir, { recursive: true, mode: 0o700 }); } catch {
+            logger.warn("大响应落盘失败 stage=mkdir，保留原响应");
+            return result;
+        }
         try { fs.chmodSync(this.offloadDir, 0o700); } catch { /* windows */ }
         const file = path.join(this.offloadDir, `offload-${randomUUID()}.json`);
         const parsed = result && typeof result === "object"
             ? (result as Record<string, unknown>)
             : { value: result };
         const text = JSON.stringify(parsed);
-        try { fs.writeFileSync(file, text, { encoding: "utf8", mode: 0o600 }); } catch { return result; }
+        try { fs.writeFileSync(file, text, { encoding: "utf8", mode: 0o600 }); } catch {
+            logger.warn("大响应落盘失败 stage=write，保留原响应");
+            return result;
+        }
         try { fs.chmodSync(file, 0o600); } catch { /* windows */ }
         const meta: ProxyMeta = { offloaded: true, path: file, bytes: Buffer.byteLength(text, "utf8") };
+        logger.info(`大响应已落盘 bytes=${meta.bytes} file=${logText(file)}`);
         return injectProxyMeta({
             content: [{ type: "text", text: JSON.stringify({ summary: "payload offloaded", path: file, bytes: meta.bytes }) }],
             isError: false,

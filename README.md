@@ -132,7 +132,11 @@ Settings 搜索 `nexusMcp` 时，**Enabled** / **Require Auth** 说明里也有�
 
 ### 查看日志
 
-**Help → Toggle Developer Tools** → Console，搜索 `Nexus MCP`。
+打开 **视图 → 输出 → Nexus MCP**。日志使用 VSCode/Cursor 原生日志通道落盘与滚动；可通过命令面板 `Developer: Open Logs Folder` 获取日志目录中的 Nexus MCP 日志文件。
+
+默认 INFO 即记录客户端版本、会话创建与握手、失效或淘汰、HTTP 拒绝、SSE 通断、调用开始/完成/耗时与失败，以及服务器停止原因和连接恢复。`session` 是会话摘要，`request` 是本次服务器运行内的请求编号；`missing_session` / `unknown_session` 区分缺少 ID 与 ID 已不存在，`session_limit` / `waiting_for_initialize` 标明清理原因。Token、完整会话 ID、工具参数和响应正文不写入日志。
+
+反馈断连时请提供报错时间、AI 客户端名称与版本、客户端日志及对应时段的 Nexus MCP 日志。服务器重启会使原会话失效，客户端需要重新 `initialize`，可关闭再开启该 MCP 连接。`nexusMcp.logLevel=debug` 额外显示诊断细节，常规扫描和心跳不会刷 INFO。
 
 ### 改了 UE 资产但磁盘未变化
 
@@ -148,7 +152,7 @@ py scripts/build_vscode.py --version <version> --output release/
 
 或 `npm ci && npm run build` 后 `npx vsce package --no-dependencies`。调试：`npm run watch`，F5 开 Extension Development Host。
 
-提交前运行 `npm run lint`（TypeScript 类型检查）、`npm run test:policy`（会话策略与多实例转发回归）和 `npm run test:timing`。CI 将这些检查作为必过步骤。
+提交前运行 `npm run lint`（TypeScript 类型检查）、`npm run test:policy`（会话策略与多实例转发回归）、`npm run test:timing` 和 `npm run test:diagnostics`（真实 HTTP 的 INFO 日志与脱敏回归）。CI 将这些检查作为必过步骤。
 
 GitHub Release 正文仅来自 `CHANGELOG.md`（`py scripts/extract_release_notes.py --version X.Y.Z --verify`）。tag：`nexus-vscode-vX.Y.Z`。商店详情页文案在 [README.marketplace.md](README.marketplace.md)，不与本 README 混用。
 

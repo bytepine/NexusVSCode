@@ -7,6 +7,7 @@ import { StatusBarWidget } from "./ui/StatusBarWidget";
 import { showInstancePicker, copyMcpConfig, showAndCopyAuthToken } from "./ui/InstancePicker";
 import { getConfig, onConfigChanged, MAX_SCAN_PORT_SPAN, scanPortSpan } from "./config/NexusLinkSettings";
 import { logger } from "./util/logger";
+import { logText } from "./util/diagnostics";
 import { mcpDisplayHost } from "./util/lanHost";
 import { loadOrCreateMachineToken } from "./util/mcpAuth";
 
@@ -35,6 +36,7 @@ async function getOrCreateProxyToken(context: vscode.ExtensionContext): Promise<
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
     logger.init(context);
+    logger.info(`Nexus MCP 启动 version=${logText((context.extension.packageJSON as Record<string, unknown>).version)} pid=${process.pid} platform=${process.platform}/${process.arch}`);
     context.subscriptions.push(
         vscode.commands.registerCommand("nexus.copyAuthToken", async () => {
             const token = await getOrCreateProxyToken(context);
@@ -123,7 +125,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
                 prevConfig = newConfig;
             }
             if (!newConfig.enabled) {
-                await stopAll();
+                await stopAll("config_disabled");
                 return;
             }
             // enabled 从 false → true：冷启动
@@ -132,6 +134,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
                 return;
             }
             warnPortOverlap(newConfig);
+            logger.info(`配置变更 port=${newConfig.httpPort} listen_lan=${newConfig.listenLan} require_auth=${newConfig.requireAuth} scan=${newConfig.scanPortStart}-${newConfig.scanPortEnd} interval_s=${newConfig.scanIntervalSeconds} remote_count=${newConfig.remoteUnreal.length} write_gate=${logText(newConfig.writeGate)}`);
             // 热更新扫描端口范围并重置扫描定时器
             manager.scanPortStart = newConfig.scanPortStart;
             manager.scanPortEnd = newConfig.scanPortEnd;
@@ -153,6 +156,7 @@ async function startAll(
     config: ReturnType<typeof getConfig>,
 ): Promise<void> {
     // 初始化 UE 实例管理器
+    logger.info(`启动配置 enabled=${config.enabled} port=${config.httpPort} listen_lan=${config.listenLan} require_auth=${config.requireAuth} scan=${config.scanPortStart}-${config.scanPortEnd} interval_s=${config.scanIntervalSeconds} remote_count=${config.remoteUnreal.length}`);
     manager = new UnrealInstanceManager();
     manager.scanPortStart = config.scanPortStart;
     manager.scanPortEnd = config.scanPortEnd;
@@ -271,17 +275,17 @@ async function startAll(
 }
 
 export async function deactivate(): Promise<void> {
-    await stopAll();
+    await stopAll("extension_deactivate");
 }
 
-async function stopAll(): Promise<void> {
+async function stopAll(reason = "start_failed"): Promise<void> {
     if (scanTimer) {
         clearInterval(scanTimer);
         scanTimer = null;
     }
     manager?.dispose();
     manager = null;
-    await httpServer?.stop();
+    await httpServer?.stop(reason);
     httpServer = null;
     preferredHttpPort = 0;
     preferredListenLan = false;
@@ -345,7 +349,7 @@ async function restartHttpServer(
         await startAll(context, config);
         return;
     }
-    await httpServer?.stop();
+    await httpServer?.stop("listener_config_changed");
     httpServer = new NexusMcpHttpServer(
         manager,
         (context.extension.packageJSON as Record<string, unknown>).version as string ?? "0.0.0",

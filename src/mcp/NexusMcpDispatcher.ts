@@ -4,6 +4,8 @@ import type { UnrealInstanceManager, WsRequestResult } from "../unreal/UnrealIns
 import { TOOLS_CALL_TIMEOUT_MS } from "../unreal/proxyTiming";
 import { explicitTargetPort, parseCall } from "../proxy/sessionPolicy";
 import { deniedErrorData, wrapCached, wrapDegraded } from "../proxy/SessionHub";
+import { logger } from "../util/logger";
+import { logText } from "../util/diagnostics";
 
 /**
  * MCP 会话状态。
@@ -136,11 +138,15 @@ export class NexusMcpDispatcher {
                 }
             } catch { /* UE 未运行时仍返回 prefix */ }
         })();
-        const timeout = new Promise<void>(resolve =>
-            setTimeout(resolve, NexusMcpDispatcher.INITIALIZE_WARMUP_MS)
-        );
+        let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
+        const timeout = new Promise<void>(resolve => {
+            timeoutHandle = setTimeout(() => {
+                logger.info(`MCP initialize 预热超时 timeout_ms=${NexusMcpDispatcher.INITIALIZE_WARMUP_MS}，后台继续连接`);
+                resolve();
+            }, NexusMcpDispatcher.INITIALIZE_WARMUP_MS);
+        });
         // 超时则先返回 prefix，warmup 后台继续执行（不 cancel，为下次 tools/call 预热缓存）
-        await Promise.race([warmup, timeout]);
+        await Promise.race([warmup, timeout]).finally(() => clearTimeout(timeoutHandle));
 
         // 连接状态文案固定，避免随 WS 通断打穿 Prompt Cache（ephemeral）。
         const instructionsPrefix = this.unrealManager.getProxyConfig().initializePrefix;
@@ -269,6 +275,7 @@ export class NexusMcpDispatcher {
             outcome = await this.unrealManager.forwardToolCall(forwardParams);
             if (outcome.status === "disconnected") {
                 if (await this.unrealManager.ensureLongConnection()) {
+                    logger.info(`工具转发重连后重试 tool=${logText(toolName)} capability=${logText(callInfo.capability)}`);
                     callInfo = parseCall(toolName, args, this.unrealManager.cacheScope);
                     outcome = await this.unrealManager.forwardToolCall(forwardParams);
                 }
@@ -277,6 +284,7 @@ export class NexusMcpDispatcher {
         if (outcome.status === "disconnected") {
             const snap = hub.lookupDegraded(callInfo, now);
             if (snap) {
+                logger.warn(`UE 未连接，返回缓存快照 tool=${logText(toolName)} capability=${logText(callInfo.capability)} snapshot=${logText(snap.snapshotAt)}`);
                 return makeResult(id, wrapDegraded(snap.result, snap.snapshotAt) as Record<string, unknown>);
             }
             this.unrealManager.proxyFeedbackBuffer.enqueue({

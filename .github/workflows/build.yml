@@ -36,3 +36,4 @@ jobs:
         run: |
           npm run test:policy
           npm run test:timing
+          npm run test:diagnostics

@@ -6,6 +6,7 @@ import { EventEmitter } from "events";
 import type { UnrealInstanceInfo } from "./types";
 import { DEFAULT_PROXY_CONFIG, parseProxyConfig, type ProxyConfig } from "./proxyConfig";
 import { logger } from "../util/logger";
+import { logText } from "../util/diagnostics";
 import { readUeAuthToken, readMachineAuthToken, parseAuthTokens } from "../util/mcpAuth";
 import { getConfig, clampScanPorts } from "../config/NexusLinkSettings";
 import {
@@ -157,6 +158,7 @@ export class UnrealInstanceManager extends EventEmitter {
             this.fullScanCountdown = decision.nextCountdown;
             const info = await this.probeStatus(this.connectedPort, this.connectedHost);
             if (info) return; // 心跳成功，省去全量扫描
+            logger.warn(`UE 状态探测失败，重置连接 host=${logText(this.connectedHost)} port=${this.connectedPort}`);
             // 确实失联（无挂起请求）→ 重置后转全量重扫
             this.resetWsConnection(false);
         }
@@ -182,6 +184,9 @@ export class UnrealInstanceManager extends EventEmitter {
 
     private async runDiscovery(): Promise<UnrealInstanceInfo[]> {
         const found = await this.scanPortsParallel();
+        const oldKeys = this.instances.map(i => instanceKey(i.host, i.port)).sort().join(",");
+        const newKeys = found.map(i => instanceKey(i.host, i.port)).sort().join(",");
+        if (oldKeys !== newKeys) logger.info(`UE 实例列表变化 count=${found.length}`);
         this.instances = found;
 
         // WebSocket 已关但 connectedPort 未重置（竞态兜底）；慢工具挂起期间勿误判断连
@@ -193,6 +198,7 @@ export class UnrealInstanceManager extends EventEmitter {
 
         // 已连接的实例不在本轮扫描结果中 → 自动断开
         if (this.connectedPort > 0 && !found.some(i => this.isConnectedInfo(i))) {
+            logger.warn(`已连接 UE 不在扫描结果中，重置连接 host=${logText(this.connectedHost)} port=${this.connectedPort}`);
             this.resetWsConnection(false);
         }
 
@@ -341,7 +347,11 @@ export class UnrealInstanceManager extends EventEmitter {
         if (this.connectedPort === port && this.connectedHost === targetHost && this.isWsOpen()) return true;
         const remoteTok = this.tokenFor(targetHost, port);
         const info = await this.probeStatus(port, targetHost, remoteTok);
-        if (!info) return false;
+        if (!info) {
+            logger.warn(`UE 连接失败 stage=status_probe host=${logText(targetHost)} port=${port} manual=${setPreferred}`);
+            return false;
+        }
+        logger.info(`开始连接 UE host=${logText(targetHost)} port=${port} ws_port=${info.wsPort} manual=${setPreferred}`);
         this.resetWsConnection(false);
 
         return new Promise<boolean>(resolve => {
@@ -353,6 +363,7 @@ export class UnrealInstanceManager extends EventEmitter {
             socket.on("open", () => {
                 void this.ensureWsAuth(socket, info.authRequired === true, this.tokensFor(targetHost, port)).then(ok => {
                     if (!ok || this.connectionEpoch !== epoch) {
+                        if (!ok) logger.warn(`UE 连接失败 stage=auth host=${logText(targetHost)} port=${port} epoch=${epoch}`);
                         try { socket.close(); } catch { /* ignore */ }
                         if (!settled) {
                             settled = true;
@@ -365,6 +376,7 @@ export class UnrealInstanceManager extends EventEmitter {
                     this.connectedHost = targetHost;
                     this.lastConnectedInstanceKey = instanceKey(targetHost, port);
                     this.connectedToolsListMode = info.toolsListMode ?? "starter";
+                    logger.info(`已连接 UE host=${logText(targetHost)} port=${port} ws_port=${info.wsPort} epoch=${epoch}`);
                     this.attachWsKeepalive(socket);
                     this.emit("connectionChanged", port);
                     if (!settled) {
@@ -381,8 +393,9 @@ export class UnrealInstanceManager extends EventEmitter {
                 this.handleWsMessage(rawDataToUtf8(data));
             });
 
-            socket.on("close", () => {
+            socket.on("close", (code) => {
                 if (this.connectionEpoch !== epoch) return;
+                logger.warn(`WS 连接关闭 host=${logText(targetHost)} port=${port} epoch=${epoch} code=${code} pending=${this.pendingRequests.size}`);
                 this.clearWsKeepalive();
                 this.connectedPort = -1;
                 this.connectedHost = LOOPBACK_HOST;
@@ -399,8 +412,9 @@ export class UnrealInstanceManager extends EventEmitter {
                 });
             });
 
-            socket.on("error", () => {
+            socket.on("error", (err) => {
                 if (this.connectionEpoch !== epoch) return;
+                logger.warn(`WS 连接失败 host=${logText(targetHost)} port=${port} epoch=${epoch} type=${logText(err.name)} code=${logText((err as NodeJS.ErrnoException).code)}`);
                 this.clearWsKeepalive();
                 this.ws = null;
                 if (!settled) {
@@ -412,12 +426,16 @@ export class UnrealInstanceManager extends EventEmitter {
     }
 
     disconnect(): void {
+        logger.info("主动断开 UE，暂停自动重连直到下一次手动连接");
         this.manuallyDisconnected = true;
         this.resetWsConnection(true);
     }
 
     /** 关闭 WS 并重置连接状态；clearPreferred 仅用户主动断开时为 true。 */
     private resetWsConnection(clearPreferred: boolean): void {
+        if (this.ws || this.pendingRequests.size) {
+            logger.info(`重置 UE 连接 host=${logText(this.connectedHost)} port=${this.connectedPort} pending=${this.pendingRequests.size} clear_preferred=${clearPreferred}`);
+        }
         this.releasePendingRequests();
         this.clearWsKeepalive();
         ++this.connectionEpoch;
@@ -614,7 +632,10 @@ export class UnrealInstanceManager extends EventEmitter {
         const cached = this.instances.find(i =>
             i.port === port && (!host || normalizeHost(i.host) === normalizeHost(host)));
         const info = cached ?? await this.probeStatus(port, host, this.tokenFor(host, port));
-        if (!info) return { status: "disconnected" };
+        if (!info) {
+            logger.warn(`UE 一次性转发失败 stage=status_probe host=${logText(normalizeHost(host))} port=${port}`);
+            return { status: "disconnected" };
+        }
 
         return new Promise(resolve => {
             const socket = new WebSocket(`ws://${info.host}:${info.wsPort}`, { handshakeTimeout: 3000 });
@@ -628,11 +649,15 @@ export class UnrealInstanceManager extends EventEmitter {
                 resolve(value);
             };
 
-            const timer = setTimeout(() => finish({ status: "timeout" }), timeoutMs);
+            const timer = setTimeout(() => {
+                logger.warn(`UE 一次性转发失败 stage=timeout host=${logText(info.host)} port=${port} id=${id} timeout_ms=${timeoutMs}`);
+                finish({ status: "timeout" });
+            }, timeoutMs);
 
             socket.on("open", () => {
                 void this.ensureWsAuth(socket, info.authRequired === true, this.tokensFor(info.host, port)).then(ok => {
                     if (!ok) {
+                        logger.warn(`UE 一次性转发失败 stage=auth host=${logText(info.host)} port=${port} id=${id}`);
                         finish({ status: "disconnected" });
                         return;
                     }
@@ -644,10 +669,18 @@ export class UnrealInstanceManager extends EventEmitter {
                     const json = JSON.parse(rawDataToUtf8(data)) as Record<string, unknown>;
                     if (json.id !== id) return;
                     finish({ status: "ok", response: json });
-                } catch { /* ignore parse errors */ }
+                } catch {
+                    logger.warn(`UE 一次性转发失败 stage=decode host=${logText(info.host)} port=${port} id=${id}`);
+                }
             });
-            socket.on("error", () => finish({ status: "disconnected" }));
-            socket.on("close", () => finish({ status: "disconnected" }));
+            socket.on("error", err => {
+                if (!settled) logger.warn(`UE 一次性转发失败 stage=ws_error host=${logText(info.host)} port=${port} id=${id} type=${logText(err.name)} code=${logText((err as NodeJS.ErrnoException).code)}`);
+                finish({ status: "disconnected" });
+            });
+            socket.on("close", code => {
+                if (!settled) logger.warn(`UE 一次性转发失败 stage=closed host=${logText(info.host)} port=${port} id=${id} code=${code}`);
+                finish({ status: "disconnected" });
+            });
         });
     }
 
@@ -658,7 +691,10 @@ export class UnrealInstanceManager extends EventEmitter {
         timeoutMs = 5000,
     ): Promise<WsRequestResult> {
         let outcome: WsRequestResult = { status: "disconnected" };
+        const queued = Date.now();
         const run = this.wsRequestChain.then(async () => {
+            const waited = Date.now() - queued;
+            if (waited >= 1000) logger.info(`WS 请求排队 method=${logText(method)} wait_ms=${waited}`);
             outcome = await this.sendWsRequestImmediate(method, params, timeoutMs);
         });
         this.wsRequestChain = run.catch(() => { /* 保持链不断 */ });
@@ -671,6 +707,7 @@ export class UnrealInstanceManager extends EventEmitter {
         timeoutMs = 5000,
     ): Promise<WsRequestResult> {
         if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+            logger.debug(`WS 请求未发送 method=${logText(method)} reason=disconnected`);
             this.clearStaleConnectionState();
             return Promise.resolve({ status: "disconnected" });
         }
@@ -687,6 +724,7 @@ export class UnrealInstanceManager extends EventEmitter {
 
         return new Promise(resolve => {
             const timer = setTimeout(() => {
+                logger.warn(`WS 请求超时 method=${logText(method)} id=${id} timeout_ms=${timeoutMs}`);
                 this.pendingRequests.delete(id);
                 this.scheduleWsKeepalive();
                 resolve({ status: "timeout" });
@@ -778,7 +816,9 @@ export class UnrealInstanceManager extends EventEmitter {
 
         this.wsKeepaliveTimer = setInterval(() => {
             if (socket.readyState === WebSocket.OPEN) {
-                socket.ping();
+                socket.ping(undefined, undefined, err => {
+                    if (err) logger.warn(`WS 保活发送失败 type=${logText(err.name)}`);
+                });
             }
         }, interval);
     }
@@ -809,7 +849,7 @@ export class UnrealInstanceManager extends EventEmitter {
                 this.emit("toolsChanged");
             }
         } catch {
-            // 解析失败静默忽略
+            logger.warn(`WS 收到无效 JSON chars=${message.length}`);
         }
     }
 
