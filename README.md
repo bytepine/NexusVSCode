@@ -134,7 +134,9 @@ Settings 搜索 `nexusMcp` 时，**Enabled** / **Require Auth** 说明里也有�
 
 点击 **Nexus 状态栏菜单 → 打开日志**，或运行命令面板 **Nexus MCP: 打开日志**，会打开当前启动的日志通道，代理停用时也可使用。每次扩展启动（包括重载）新建带启动时间的 `Nexus MCP (...)` 通道和独立日志文件，旧日志保留。VSCode/Cursor 管理文件落盘与滚动；通过命令面板 `Developer: Open Logs Folder` 可获取对应启动时间的 Nexus MCP 日志文件。
 
-默认 INFO 即记录客户端版本、会话创建与握手、失效或淘汰、HTTP 拒绝、SSE 通断、调用开始/完成/耗时与失败，以及服务器停止原因和连接恢复。`session` 是会话摘要，`request` 是本次服务器运行内的请求编号；`missing_session` / `unknown_session` 区分缺少 ID 与 ID 已不存在，`session_limit` / `waiting_for_initialize` 标明清理原因。Token、完整会话 ID、工具参数和响应正文不写入日志。
+默认 INFO 即记录客户端版本、会话创建与握手、失效或淘汰、HTTP 拒绝、SSE 通断、调用开始/完成/耗时与失败，以及服务器停止原因和连接恢复。`session` 是会话摘要，`request` 是本次服务器运行内的请求编号；`missing_session` / `unknown_session` 区分缺少 ID 与 ID 已不存在。Token、完整会话 ID、工具参数和响应正文不写入日志。
+
+最多保留 50 个 MCP 会话；容量满时仅回收超过 30 分钟没有请求、也没有进行中调用或 SSE 连接的会话（`idle_timeout`）。正在初始化或使用的会话不会被新连接淘汰；无法回收时，新连接返回 503 和 `Retry-After`（`session_limit`）。客户端可通过携带会话 ID 的 `DELETE /stream` 主动结束会话（`client_delete`）。回收后的 ID 需要重新 `initialize`。
 
 反馈断连时请提供报错时间、AI 客户端名称与版本、客户端日志及对应时段的 Nexus MCP 日志。服务器重启会使原会话失效，客户端需要重新 `initialize`，可关闭再开启该 MCP 连接。`nexusMcp.logLevel=debug` 额外显示诊断细节，常规扫描和心跳不会刷 INFO。
 
@@ -152,7 +154,7 @@ py scripts/build_vscode.py --version <version> --output release/
 
 或 `npm ci && npm run build` 后 `npx vsce package --no-dependencies`。调试：`npm run watch`，F5 开 Extension Development Host。
 
-提交前运行 `npm run lint`（TypeScript 类型检查）、`npm run test:policy`（会话策略与多实例转发回归）、`npm run test:timing` 和 `npm run test:diagnostics`（真实 HTTP 的 INFO 日志与脱敏回归）。CI 将这些检查作为必过步骤。
+提交前运行 `npm run lint`（TypeScript 类型检查）、`npm run test:policy`（会话策略与多实例转发回归）、`npm run test:timing` 和 `npm run test:diagnostics`（真实 HTTP 的会话并发、容量回收、主动结束及 INFO 日志与脱敏回归）。CI 将这些检查作为必过步骤。
 
 GitHub Release 正文仅来自 `CHANGELOG.md`（`py scripts/extract_release_notes.py --version X.Y.Z --verify`）。tag：`nexus-vscode-vX.Y.Z`。商店详情页文案在 [README.marketplace.md](README.marketplace.md)，不与本 README 混用。
 

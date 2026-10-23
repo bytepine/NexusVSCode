@@ -71,6 +71,13 @@ async function main() {
         assert.equal((await rpc("notifications/initialized", session)).status, 202);
         return session;
     };
+    const waitFor = async predicate => {
+        const deadline = Date.now() + 1000;
+        while (!predicate()) {
+            assert.ok(Date.now() < deadline, "HTTP regression did not reach expected state");
+            await new Promise(resolve => setTimeout(resolve, 1));
+        }
+    };
     try {
         assert.ok(await server.start(0));
         assert.equal((await post("{}", "", { Authorization: "Bearer wrong" })).status, 401);
@@ -84,19 +91,61 @@ async function main() {
         for (const capability of ["GetExample", "GetFailure"]) {
             await rpc("tools/call", session, { name: "CallCapability", arguments: { Capability: capability, Arguments: { value: "private-argument-value" } } });
         }
-        // 当前真实会话加上 49 个已初始化会话，下一次握手必须留下淘汰原因。
-        for (let i = 0; i < 49; i++) server.httpSessions.set(`seed-${i}`, { isWaitingForInitialize: false });
-        server.httpSessions.set("waiting", { isWaitingForInitialize: true });
-        await initialize();
-        assert.equal((await rpc("ping", session)).status, 404);
-        await new Promise((resolve, reject) => {
+        // 两次握手同时等待预热；第二次不能把第一次当作陈旧会话删除。
+        const warmups = [];
+        manager.maintainConnection = () => new Promise(resolve => warmups.push(resolve));
+        const a = initialize();
+        await waitFor(() => warmups.length === 1);
+        const b = initialize();
+        await waitFor(() => warmups.length === 2);
+        warmups.forEach(resolve => resolve());
+        const [busyId, sseId] = await Promise.all([a, b]);
+        manager.maintainConnection = async () => {};
+        assert.equal((await rpc("ping", busyId)).status, 200);
+        assert.equal((await rpc("ping", sseId)).status, 200);
+
+        for (let i = server.httpSessions.size; i < 50; i++) {
+            server.httpSessions.set(`seed-${i}`, { dispatcher: server.httpSessions.get(session).dispatcher, lastUsed: Date.now(), active: 0 });
+        }
+        const full = await rpc("initialize");
+        assert.equal(full.status, 503);
+        assert.equal(full.headers["retry-after"], "1");
+        assert.equal((await rpc("ping", session)).status, 200, "full table must preserve live sessions");
+
+        const sseResponse = await new Promise((resolve, reject) => {
             const req = http.get({ host: "127.0.0.1", port: server.httpServer.address().port, path: "/stream",
-                headers: { Authorization: `Bearer ${token}`, "Mcp-Session-Id": sessions[1] } }, res => {
-                res.destroy();
-                resolve();
-            });
+                headers: { Authorization: `Bearer ${token}`, "Mcp-Session-Id": sseId } }, resolve);
             req.on("error", reject);
         });
+        const busy = server.httpSessions.get(busyId);
+        const dispatch = busy.dispatcher.dispatch.bind(busy.dispatcher);
+        let finishCall;
+        busy.dispatcher.dispatch = () => new Promise(resolve => { finishCall = () => resolve('{"jsonrpc":"2.0","id":1,"result":{}}'); });
+        const pendingCall = rpc("ping", busyId);
+        await waitFor(() => finishCall);
+        for (const entry of server.httpSessions.values()) entry.lastUsed = Date.now() - 30 * 60_000;
+        assert.equal((await rpc("ping", session)).status, 200);
+        const next = await initialize();
+        assert.ok(server.httpSessions.has(busyId), "long call must not be reclaimed");
+        assert.ok(server.httpSessions.has(sseId), "open SSE must not be reclaimed");
+        assert.equal((await rpc("ping", session)).status, 200, "request must refresh activity");
+        assert.equal((await rpc("ping", "seed-3")).status, 404, "idle session must free capacity");
+        finishCall();
+        assert.equal((await pendingCall).status, 200);
+        busy.dispatcher.dispatch = dispatch;
+        assert.equal(busy.active, 0);
+        sseResponse.destroy();
+        await waitFor(() => server.httpSessions.get(sseId).active === 0);
+        assert.ok(Date.now() - server.httpSessions.get(sseId).lastUsed < 1000);
+        const remove = () => new Promise((resolve, reject) => {
+            const req = http.request({ host: "127.0.0.1", port: server.httpServer.address().port, path: "/stream", method: "DELETE",
+                headers: { Authorization: `Bearer ${token}`, "Mcp-Session-Id": next } }, res => { res.resume(); res.on("end", () => resolve(res.statusCode)); });
+            req.on("error", reject); req.end();
+        });
+        assert.equal(await remove(), 204);
+        assert.equal(await remove(), 404);
+        assert.equal((await rpc("ping", next)).status, 404);
+        assert.equal((await rpc("ping", session)).status, 200, "DELETE must preserve other sessions");
     } finally {
         await server.stop("diagnostics_test");
         manager.sessionHub.dispose();
@@ -104,7 +153,7 @@ async function main() {
     await new Promise(resolve => setTimeout(resolve, 20));
     const output = logs.join("\n");
     for (const expected of ["reason=invalid_authorization", "reason=browser_origin", "reason=missing_session", "reason=unknown_session", "reason=empty_body",
-        "reason=session_limit", "reason=waiting_for_initialize", "MCP 新会话", 'client="Test\\nClient"', "MCP 请求开始", "MCP 请求完成",
+        "reason=session_limit", "reason=idle_timeout", "reason=client_delete", "MCP 新会话", 'client="Test\\nClient"', "MCP 请求开始", "MCP 请求完成",
         "rpc_code=-32700", "rpc_code=-32601", "isError=true", "elapsed_ms=", "MCP SSE 已连接", "MCP SSE 已断开", 'reason="diagnostics_test"']) {
         assert.ok(output.includes(expected), `missing ${expected}\n${output}`);
     }

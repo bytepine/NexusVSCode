@@ -18,10 +18,17 @@ import { logText, sessionLogId, rpcLogFields, rpcFailure } from "../util/diagnos
 
 const MCP_SESSION_HEADER = "mcp-session-id";
 
+interface HttpSession {
+    dispatcher: NexusMcpDispatcher;
+    lastUsed: number;
+    active: number;
+}
+
 /**
  * nexus-vscode 独立 MCP HTTP 服务器（per-session 会话隔离）。
  *   POST /stream   → Streamable HTTP，通过 Mcp-Session-Id 头隔离会话
  *   GET  /sse      → SSE 长连接，仅用于服务端推送通知
+ *   DELETE /stream → 客户端主动结束会话
  */
 export class NexusMcpHttpServer {
 
@@ -30,10 +37,11 @@ export class NexusMcpHttpServer {
     private readonly manager: UnrealInstanceManager;
 
     /** HTTP 通道的 per-session Dispatcher 表。 */
-    private httpSessions = new Map<string, NexusMcpDispatcher>();
+    private httpSessions = new Map<string, HttpSession>();
 
-    /** 活跃会话上限：超出时按插入序淘汰最旧的非当前会话（防客户端循环重连导致内存增长）。 */
+    /** 容量不足时仅回收空闲会话，不驱逐初始化、调用或 SSE 中的会话。 */
     private static readonly MAX_SESSIONS = 50;
+    private static readonly SESSION_IDLE_MS = 30 * 60_000;
     private static readonly MAX_SSE_CLIENTS = 32;
 
     /** 活跃的 SSE 客户端连接，用于推送 MCP 服务端通知。 */
@@ -93,6 +101,19 @@ export class NexusMcpHttpServer {
 
             if (path === "/stream" && method === "GET") {
                 this.handleSse(req, res);
+                return;
+            }
+
+            if (path === "/stream" && method === "DELETE") {
+                const id = String(req.headers[MCP_SESSION_HEADER] ?? "");
+                if (!this.httpSessions.delete(id)) {
+                    res.writeHead(404, { "Content-Type": "application/json" });
+                    res.end(JSON.stringify({ error: "Invalid or missing Mcp-Session-Id" }));
+                    return;
+                }
+                logger.info(`MCP 会话移除 session=${sessionLogId(id)} reason=client_delete`);
+                res.writeHead(204);
+                res.end();
                 return;
             }
 
@@ -176,35 +197,33 @@ export class NexusMcpHttpServer {
         }
 
         let sessionId: string;
-        let dispatcher: NexusMcpDispatcher;
+        let session: HttpSession;
 
         if (bIsInitialize) {
-            sessionId = crypto.randomUUID();
-            dispatcher = new NexusMcpDispatcher(this.manager, () => this.sendToolsChangedNotification(), this.serverVersion);
-            this.httpSessions.set(sessionId, dispatcher);
-            // 清理其余仍处于 WaitingForInitialize 的陈旧会话
-            for (const [k, d] of this.httpSessions) {
-                if (k !== sessionId && d.isWaitingForInitialize) {
-                    logger.warn(`MCP 会话移除 session=${sessionLogId(k)} reason=waiting_for_initialize`);
-                    this.httpSessions.delete(k);
-                }
-            }
-            // 超上限时按插入序淘汰最旧的非当前会话（防循环重连导致内存增长）
-            if (this.httpSessions.size > NexusMcpHttpServer.MAX_SESSIONS) {
-                for (const k of this.httpSessions.keys()) {
-                    if (k !== sessionId) {
-                        logger.warn(`MCP 会话移除 session=${sessionLogId(k)} reason=session_limit limit=${NexusMcpHttpServer.MAX_SESSIONS}`);
-                        this.httpSessions.delete(k);
-                        break;
+            const now = Date.now();
+            if (this.httpSessions.size >= NexusMcpHttpServer.MAX_SESSIONS) {
+                for (const [id, old] of this.httpSessions) {
+                    if (old.active === 0 && now - old.lastUsed >= NexusMcpHttpServer.SESSION_IDLE_MS) {
+                        logger.info(`MCP 会话移除 session=${sessionLogId(id)} reason=idle_timeout`);
+                        this.httpSessions.delete(id);
                     }
                 }
             }
+            if (this.httpSessions.size >= NexusMcpHttpServer.MAX_SESSIONS) {
+                this.logRejection(req, 503, "session_limit");
+                res.writeHead(503, { "Content-Type": "application/json", "Retry-After": "1" });
+                res.end(JSON.stringify({ error: "too many active MCP sessions" }));
+                return;
+            }
+            sessionId = crypto.randomUUID();
+            session = { dispatcher: new NexusMcpDispatcher(this.manager, () => this.sendToolsChangedNotification(), this.serverVersion), lastUsed: now, active: 0 };
+            this.httpSessions.set(sessionId, session);
             const params = msg?.params as Record<string, unknown> | undefined;
             const client = params?.clientInfo as Record<string, unknown> | undefined;
             logger.info(`MCP 新会话 session=${sessionLogId(sessionId)} previous=${sessionLogId(incomingSessionId)} client=${logText(client?.name)} version=${logText(client?.version)} protocol=${logText(params?.protocolVersion)} remote=${logText(req.socket.remoteAddress)} sessions=${this.httpSessions.size}`);
         } else if (incomingSessionId && this.httpSessions.has(incomingSessionId)) {
             sessionId = incomingSessionId;
-            dispatcher = this.httpSessions.get(sessionId)!;
+            session = this.httpSessions.get(sessionId)!;
         } else {
             this.logRejection(req, 404, incomingSessionId ? "unknown_session" : "missing_session");
             logger.warn(`MCP 会话查找失败 request=${requestId} session=${sessionLogId(incomingSessionId)} ${rpcLogFields(msg)} sessions=${this.httpSessions.size}；客户端需要重新 initialize`);
@@ -213,6 +232,8 @@ export class NexusMcpHttpServer {
             return;
         }
 
+        session.active++;
+        session.lastUsed = Date.now();
         const controller = new AbortController();
         const fields = `request=${requestId} session=${sessionLogId(sessionId)} ${rpcLogFields(msg)}`;
         if (msg?.method === "tools/call") logger.info(`MCP 请求开始 ${fields}`);
@@ -222,7 +243,7 @@ export class NexusMcpHttpServer {
         res.once("close", cancel);
         if (shutdown.aborted) cancel();
         try {
-            const responseJson = await dispatcher.dispatch(body, controller.signal);
+            const responseJson = await session.dispatcher.dispatch(body, controller.signal);
             const failure = rpcFailure(responseJson);
             const timing = `elapsed_ms=${Date.now() - started}`;
             if (failure) logger.warn(`MCP 请求失败 ${fields} ${failure} ${timing}`);
@@ -248,6 +269,7 @@ export class NexusMcpHttpServer {
             res.writeHead(500, { "Content-Type": "application/json" });
             res.end(JSON.stringify({ error: "internal error" }));
         } finally {
+            this.releaseSession(session);
             shutdown.removeEventListener("abort", cancel);
             res.removeListener("close", cancel);
         }
@@ -266,6 +288,11 @@ export class NexusMcpHttpServer {
             res.writeHead(503, { "Content-Type": "application/json" });
             res.end(JSON.stringify({ error: "too many SSE clients" }));
             return;
+        }
+        const session = this.httpSessions.get(String(req.headers[MCP_SESSION_HEADER] ?? ""));
+        if (session) {
+            session.active++;
+            session.lastUsed = Date.now();
         }
         res.writeHead(200, {
             "Content-Type": "text/event-stream",
@@ -294,10 +321,16 @@ export class NexusMcpHttpServer {
         }, NexusMcpHttpServer.SSE_KEEPALIVE_MS);
 
         res.on("close", () => {
+            if (session) this.releaseSession(session);
             logger.info(`MCP SSE 已断开 ${fields} elapsed_ms=${Date.now() - started}`);
             clearInterval(timer);
             this.sseResponses = this.sseResponses.filter(r => r !== res);
         });
+    }
+
+    private releaseSession(session: HttpSession): void {
+        session.active--;
+        session.lastUsed = Date.now();
     }
 
     /**

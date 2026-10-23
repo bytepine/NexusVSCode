@@ -134,7 +134,9 @@ Confirm `nexusMcp.enabled` is `true`, UE MCP is on, the status bar shows a proje
 
 Click **Nexus status bar → 打开日志 (Open log)** or run **Nexus MCP: 打开日志** in the command palette to reveal the current startup's log channel, including when the proxy is disabled. Each extension startup/reload creates a new `Nexus MCP (...)` channel and file named with its startup time; old logs are preserved. VSCode/Cursor handles persistence and rotation. Use `Developer: Open Logs Folder` to retrieve the matching Nexus MCP log file.
 
-Default INFO logs include client versions, session creation and initialization, invalid or evicted sessions, HTTP rejections, SSE connections, call start/completion/duration/failure, server stop reasons and connection recovery. Match sessions by their hashed `session` value and calls by `request` within one server run. `missing_session` / `unknown_session` distinguish absent headers from unknown IDs; `session_limit` / `waiting_for_initialize` identify eviction reasons. Tokens, complete session IDs, tool arguments and response bodies are omitted.
+Default INFO logs include client versions, session creation and initialization, invalid or evicted sessions, HTTP rejections, SSE connections, call start/completion/duration/failure, server stop reasons and connection recovery. Match sessions by their hashed `session` value and calls by `request` within one server run. `missing_session` / `unknown_session` distinguish absent headers from unknown IDs. Tokens, complete session IDs, tool arguments and response bodies are omitted.
+
+The server retains up to 50 MCP sessions. At capacity, it reclaims only sessions with no requests for 30 minutes and no in-flight calls or SSE connections (`idle_timeout`). New connections never evict sessions that are initializing or active; if no capacity can be freed, initialization returns 503 with `Retry-After` (`session_limit`). Clients can end a session with `DELETE /stream` and its session ID (`client_delete`). Reclaimed IDs require a new `initialize`.
 
 For disconnect reports, include the incident time, AI client name/version, client log and Nexus MCP logs covering that time. Restarting the server invalidates sessions; clients must initialize again, which can be triggered by toggling the MCP connection. Set `nexusMcp.logLevel=debug` for extra diagnostics; routine scans and heartbeats do not produce INFO noise.
 
@@ -152,7 +154,7 @@ py scripts/build_vscode.py --version <version> --output release/
 
 Or `npm ci && npm run build` then `npx vsce package --no-dependencies`. Debug: `npm run watch`, F5 for Extension Development Host.
 
-Before submitting, run `npm run lint` (TypeScript type checking), `npm run test:policy` (session policy and multi-instance routing), `npm run test:timing`, and `npm run test:diagnostics` (HTTP INFO logging and redaction). All four are required CI checks.
+Before submitting, run `npm run lint` (TypeScript type checking), `npm run test:policy` (session policy and multi-instance routing), `npm run test:timing`, and `npm run test:diagnostics` (HTTP session concurrency, capacity reclamation, deletion, INFO logging and redaction). All four are required CI checks.
 
 GitHub Release notes come only from `CHANGELOG.md` (`py scripts/extract_release_notes.py --version X.Y.Z --verify`). Tag: `nexus-vscode-vX.Y.Z`. Marketplace listing copy lives in [README.marketplace.md](README.marketplace.md), not this README.
 

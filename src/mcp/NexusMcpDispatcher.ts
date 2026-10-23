@@ -42,10 +42,6 @@ export class NexusMcpDispatcher {
     /** 本 MCP 会话内「总是允许」的能力名。 */
     private readonly alwaysAllow = new Set<string>();
 
-    get isWaitingForInitialize(): boolean {
-        return this.state === McpSessionState.WaitingForInitialize;
-    }
-
     /** initialize 握手时 UE 预热的最大等待时间（模块级常量镜像，供测试覆盖）。 */
     static readonly INITIALIZE_WARMUP_MS = INITIALIZE_WARMUP_MS;
 
