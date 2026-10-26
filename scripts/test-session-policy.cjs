@@ -387,6 +387,7 @@ async function testToolListReconnect() {
         ws.on("connection", socket => socket.on("message", data => {
             const request = JSON.parse(data.toString());
             let result = {};
+            if (request.method === "auth") result = { ok: request.params.token === "contract-test-token" };
             if (request.method === "tools/list") result = { tools: names.map(name => ({ name, inputSchema: { type: "object" } })) };
             if (request.method === "tools/call") {
                 if (!names.includes(request.params.name)) {
@@ -394,7 +395,10 @@ async function testToolListReconnect() {
                     return;
                 }
                 calls++;
+                if (request.params.arguments?.ContractTimeout) return;
                 result = { content: [{ type: "text", text: "{}" }] };
+                if (request.params.arguments?.ContractFailure) result = { isError: true,
+                    structuredContent: { ErrorKind: "ArgInvalid", bRolledBack: false, Error: "contract failure" }, content: [] };
             }
             socket.send(JSON.stringify({ jsonrpc: "2.0", id: request.id, result }));
         }));
@@ -426,6 +430,16 @@ async function testToolListReconnect() {
             assert.ok(!response.error, JSON.stringify(response.error));
         }
         assert.equal(modern.calls(), 3, "new tools must actually reach the new UE");
+        const auth = await manager.sendWsRequest("auth", { token: "contract-test-token" }, 1000);
+        assert.equal(auth.response.result.ok, true);
+        const failure = JSON.parse(await dispatcher.dispatch(JSON.stringify({ jsonrpc: "2.0", id: 4, method: "tools/call",
+            params: { name: "CallCapability", arguments: { Capability: "ManageAssetDataTable", Arguments: {}, ContractFailure: true } } })));
+        assert.equal(failure.result.isError, true);
+        assert.equal(failure.result.structuredContent.ErrorKind, "ArgInvalid");
+        const timedOut = await manager.sendWsRequest("tools/call", { name: "CallCapability",
+            arguments: { Capability: "ManageAssetDataTable", ContractTimeout: true } }, 50);
+        assert.equal(timedOut.status, "timeout");
+        assert.equal(modern.calls(), 5, "failed and timed-out writes each reach UE once");
     } finally {
         manager.dispose();
         await legacy.close();
