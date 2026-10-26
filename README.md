@@ -154,7 +154,7 @@ py scripts/build_vscode.py --version <version> --output release/
 
 或 `npm ci && npm run build` 后 `npx vsce package --no-dependencies`。调试：`npm run watch`，F5 开 Extension Development Host。
 
-提交前运行 `npm run lint`（TypeScript 类型检查）、`npm run test:policy`（会话策略与多实例转发回归）、`npm run test:timing` 和 `npm run test:diagnostics`（真实 HTTP 的会话并发、容量回收、主动结束及 INFO 日志与脱敏回归）。CI 将这些检查作为必过步骤。
+提交前运行 `npm run lint`（TypeScript 类型检查）、`npm run test:policy`（会话策略、多实例转发及旧/新工具清单重连刷新回归）、`npm run test:timing` 和 `npm run test:diagnostics`（真实 HTTP 的会话并发、容量回收、主动结束及 INFO 日志与脱敏回归）。CI 将这些检查作为必过步骤。
 
 GitHub Release 正文仅来自 `CHANGELOG.md`（`py scripts/extract_release_notes.py --version X.Y.Z --verify`）。tag：`nexus-vscode-vX.Y.Z`。商店详情页文案在 [README.marketplace.md](README.marketplace.md)，不与本 README 混用。
 

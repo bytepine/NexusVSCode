@@ -15,6 +15,7 @@ process.on("exit", () => fs.rmSync(testRoot, { recursive: true, force: true }));
 const hubMod = require("../src/proxy/index.ts");
 const { NexusMcpDispatcher } = require("../src/mcp/NexusMcpDispatcher.ts");
 const { NexusMcpHttpServer } = require("../src/mcp/NexusMcpServer.ts");
+const { UnrealInstanceManager } = require("../src/unreal/UnrealInstanceManager.ts");
 Module._load = originalLoad;
 
 const {
@@ -371,7 +372,68 @@ async function testDispatcherRouting() {
     assert.equal(forwards, 9, "legacy batches must invalidate cached reads");
 }
 
-Promise.all([testDispatcherRouting(), testPauseCancellation(), testPausedHttpLifecycle()]).then(() => console.log("sessionPolicy, dispatcher routing and HTTP cancellation OK")).catch(error => {
+async function testToolListReconnect() {
+    const http = require("http");
+    const { WebSocketServer } = require("ws");
+    const legacyNames = ["search_capabilities", "call_capability", "submit_feedback"];
+    const modernNames = ["SearchCapabilities", "CallCapability", "SubmitFeedback"];
+    async function instance(names) {
+        let calls = 0;
+        const server = http.createServer((req, res) => {
+            res.setHeader("Content-Type", "application/json");
+            res.end(JSON.stringify({ server: "NexusLink", wsPort: server.address().port }));
+        });
+        const ws = new WebSocketServer({ server });
+        ws.on("connection", socket => socket.on("message", data => {
+            const request = JSON.parse(data.toString());
+            let result = {};
+            if (request.method === "tools/list") result = { tools: names.map(name => ({ name, inputSchema: { type: "object" } })) };
+            if (request.method === "tools/call") {
+                if (!names.includes(request.params.name)) {
+                    socket.send(JSON.stringify({ jsonrpc: "2.0", id: request.id, error: { code: -32601, message: "Tool not found" } }));
+                    return;
+                }
+                calls++;
+                result = { content: [{ type: "text", text: "{}" }] };
+            }
+            socket.send(JSON.stringify({ jsonrpc: "2.0", id: request.id, result }));
+        }));
+        await new Promise(resolve => server.listen(0, "127.0.0.1", resolve));
+        return { port: server.address().port, calls: () => calls, close: async () => {
+            for (const socket of ws.clients) socket.terminate();
+            await new Promise(resolve => ws.close(resolve));
+            await new Promise(resolve => server.close(resolve));
+        } };
+    }
+    const legacy = await instance(legacyNames);
+    const modern = await instance(modernNames);
+    const manager = new UnrealInstanceManager();
+    manager.scanPortStart = manager.scanPortEnd = modern.port;
+    try {
+        assert.ok(await manager.connectTo(legacy.port, true));
+        const dispatcher = new NexusMcpDispatcher(manager);
+        await dispatcher.dispatch(JSON.stringify({ jsonrpc: "2.0", id: 1, method: "initialize" }));
+        await dispatcher.dispatch(JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized" }));
+        const list = async () => JSON.parse(await dispatcher.dispatch(JSON.stringify({ jsonrpc: "2.0", id: 2, method: "tools/list" }))).result.tools.map(tool => tool.name);
+        const before = await list();
+        assert.ok(legacyNames.every(name => before.includes(name)));
+        assert.ok(await manager.connectTo(modern.port, true));
+        const after = await list();
+        assert.ok(modernNames.every(name => after.includes(name)) && legacyNames.every(name => !after.includes(name)), "reconnect must refresh upstream tool names");
+        for (const name of modernNames) {
+            const response = JSON.parse(await dispatcher.dispatch(JSON.stringify({ jsonrpc: "2.0", id: 3, method: "tools/call",
+                params: { name, arguments: { Query: "", Capability: "GetEditorInfo", Arguments: {} } } })));
+            assert.ok(!response.error, JSON.stringify(response.error));
+        }
+        assert.equal(modern.calls(), 3, "new tools must actually reach the new UE");
+    } finally {
+        manager.dispose();
+        await legacy.close();
+        await modern.close();
+    }
+}
+
+Promise.all([testDispatcherRouting(), testPauseCancellation(), testPausedHttpLifecycle(), testToolListReconnect()]).then(() => console.log("sessionPolicy, dispatcher routing, reconnect tool refresh and HTTP cancellation OK")).catch(error => {
     console.error(error);
     process.exitCode = 1;
 });
