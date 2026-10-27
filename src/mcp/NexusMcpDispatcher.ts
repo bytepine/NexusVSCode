@@ -1,3 +1,4 @@
+import { randomUUID } from "crypto";
 // Copyright byteyang. All Rights Reserved.
 
 import type { UnrealInstanceManager, WsRequestResult } from "../unreal/UnrealInstanceManager";
@@ -39,6 +40,10 @@ const INITIALIZE_WARMUP_MS = 2000;
 export class NexusMcpDispatcher {
 
     private state = McpSessionState.WaitingForInitialize;
+    private readonly operationSession = randomUUID();
+    private readonly operationRequests = new Map<string, AbortController>();
+    private readonly operationProgress = new Map<string, (event: Record<string, unknown>) => void>();
+
     /** 本 MCP 会话内「总是允许」的能力名。 */
     private readonly alwaysAllow = new Set<string>();
 
@@ -56,7 +61,7 @@ export class NexusMcpDispatcher {
     /**
      * 处理一条 JSON-RPC 消息，返回响应 JSON 字符串。
      */
-    async dispatch(jsonLine: string, signal?: AbortSignal): Promise<string> {
+    async dispatch(jsonLine: string, signal?: AbortSignal, notify?: (event: Record<string, unknown>) => void): Promise<string> {
         let msg: Record<string, unknown>;
         try {
             msg = JSON.parse(jsonLine);
@@ -94,11 +99,25 @@ export class NexusMcpDispatcher {
                 }
                 return this.handleToolsList(id);
 
+            case "notifications/cancelled":
+                this.operationRequests.get(JSON.stringify(params?.requestId))?.abort();
+                return "";
             case "tools/call":
                 if (this.state !== McpSessionState.Running) {
                     return makeError(id, INVALID_REQUEST, "Session not initialized");
                 }
-                return this.handleToolsCall(id, params, signal);
+                {
+                    const key = JSON.stringify(id);
+                    if (this.operationRequests.has(key)) return makeError(id, INVALID_REQUEST, "Duplicate active request id");
+                    const controller = new AbortController();
+                    const cancel = () => controller.abort();
+                    signal?.addEventListener("abort", cancel, {once:true});
+                    if (signal?.aborted) cancel();
+                    this.operationRequests.set(key, controller);
+                    if (notify) this.operationProgress.set(key, notify);
+                    try { return await this.handleToolsCall(id, params, controller.signal); }
+                    finally { this.operationRequests.delete(key); this.operationProgress.delete(key); signal?.removeEventListener("abort", cancel); }
+                }
 
             default:
                 if (id !== null) {
@@ -251,14 +270,24 @@ export class NexusMcpDispatcher {
         let callInfo = parseCall(toolName, args, this.unrealManager.cacheScope);
         const now = Date.now();
         const fresh = hub.lookupFresh(callInfo, now);
-        if (fresh) {
+        if (fresh && !isEditorOperation(callInfo.capability)) {
             return makeResult(id, wrapCached(fresh.result, fresh.kind, fresh.snapshotAt) as Record<string, unknown>);
         }
 
         // 可选 targetPort：一次性路由到指定实例，不改动长连接绑定
         const forwardParams = { ...params };
         let outcome: WsRequestResult;
-        if (targetPort !== undefined) {
+        if (isEditorOperation(callInfo.capability)) {
+            const meta = {...(params._meta as Record<string, unknown> ?? {}), nexusSessionId:this.operationSession};
+            forwardParams._meta = meta;
+            const {targetPort: _port, targetHost: _host, ...rest} = args ?? {};
+            forwardParams.arguments = rest;
+            if (targetPort === undefined) await this.unrealManager.ensureLongConnection();
+            const controller = this.operationRequests.get(JSON.stringify(id));
+            outcome = await this.unrealManager.forwardToolCallToPort(targetPort ?? this.unrealManager.connectedPort,
+                forwardParams, TOOLS_CALL_TIMEOUT_MS, typeof args?.targetHost === "string" ? args.targetHost : this.unrealManager.connectedHost,
+                this.operationProgress.get(JSON.stringify(id)), controller?.signal);
+        } else if (targetPort !== undefined) {
             const targetHost = typeof args?.targetHost === "string" ? args.targetHost : undefined;
             const { targetPort: _drop, targetHost: _dropHost, ...restArgs } = args ?? {};
             forwardParams.arguments = restArgs;
@@ -279,7 +308,7 @@ export class NexusMcpDispatcher {
         }
         if (outcome.status === "disconnected") {
             const snap = hub.lookupDegraded(callInfo, now);
-            if (snap) {
+            if (snap && !isEditorOperation(callInfo.capability)) {
                 logger.warn(`UE 未连接，返回缓存快照 tool=${logText(toolName)} capability=${logText(callInfo.capability)} snapshot=${logText(snap.snapshotAt)}`);
                 return makeResult(id, wrapDegraded(snap.result, snap.snapshotAt) as Record<string, unknown>);
             }
@@ -310,7 +339,7 @@ export class NexusMcpDispatcher {
             if (targetPort === undefined && callInfo.cacheScope !== this.unrealManager.cacheScope) {
                 return makeResult(id, response.result as Record<string, unknown>);
             }
-            const stored = hub.store(callInfo, response.result, now);
+            const stored = isEditorOperation(callInfo.capability) ? response.result : hub.store(callInfo, response.result, now);
             return makeResult(id, stored as Record<string, unknown>);
         }
         if (response.error !== undefined) {
@@ -408,4 +437,8 @@ function makeError(id: unknown, code: number, message: string, data?: Record<str
  */
 function attachCacheControl(result: Record<string, unknown>): void {
     result.cache_control = { type: "ephemeral" };
+}
+
+function isEditorOperation(name: string): boolean {
+ return ["GetEditorSlate","CaptureEditorSlate","InteractEditorSlate","ControlEditorAutomation","ListEditorAutomationTests","CompileEditorLiveCoding","GetEditorOperation"].includes(name);
 }

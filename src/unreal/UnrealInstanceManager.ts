@@ -627,6 +627,8 @@ export class UnrealInstanceManager extends EventEmitter {
         params: Record<string, unknown>,
         timeoutMs = UnrealInstanceManager.TOOLS_CALL_TIMEOUT_MS,
         host?: string,
+        progress?: (event: Record<string, unknown>) => void,
+        signal?: AbortSignal,
     ): Promise<WsRequestResult> {
         // 优先从最近扫描缓存取 wsPort，省一次 HTTP 探测
         const cached = this.instances.find(i =>
@@ -640,11 +642,16 @@ export class UnrealInstanceManager extends EventEmitter {
         return new Promise(resolve => {
             const socket = new WebSocket(`ws://${info.host}:${info.wsPort}`, { handshakeTimeout: 3000 });
             const id = this.idCounter++;
+            const cancel = () => {
+                if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify({jsonrpc:"2.0", method:"notifications/cancelled", params:{requestId:id, _meta:params._meta}}));
+            };
+            signal?.addEventListener("abort", cancel, {once:true});
             let settled = false;
             const finish = (value: WsRequestResult): void => {
                 if (settled) return;
                 settled = true;
                 clearTimeout(timer);
+                signal?.removeEventListener("abort", cancel);
                 try { socket.close(); } catch { /* ignore */ }
                 resolve(value);
             };
@@ -662,11 +669,13 @@ export class UnrealInstanceManager extends EventEmitter {
                         return;
                     }
                     socket.send(JSON.stringify({ jsonrpc: "2.0", id, method: "tools/call", params }));
+                    if (signal?.aborted) cancel();
                 });
             });
             socket.on("message", (data: WebSocket.RawData) => {
                 try {
                     const json = JSON.parse(rawDataToUtf8(data)) as Record<string, unknown>;
+                    if (json.method === "notifications/progress") { progress?.(json); return; }
                     if (json.id !== id) return;
                     finish({ status: "ok", response: json });
                 } catch {

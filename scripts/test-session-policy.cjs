@@ -447,7 +447,37 @@ async function testToolListReconnect() {
     }
 }
 
-Promise.all([testDispatcherRouting(), testPauseCancellation(), testPausedHttpLifecycle(), testToolListReconnect()]).then(() => console.log("sessionPolicy, dispatcher routing, reconnect tool refresh and HTTP cancellation OK")).catch(error => {
+
+async function testEditorOperationWire() {
+ const http = require("http");
+ const {WebSocketServer} = require("ws");
+ const server = http.createServer((_req,res) => res.end(JSON.stringify({server:"NexusLink",wsPort:server.address().port})));
+ const ws = new WebSocketServer({server});
+ ws.on("connection", socket => { let id; socket.on("message", data => {
+  const message = JSON.parse(data.toString());
+  if (message.method === "tools/call") {
+   id = message.id;
+   socket.send(JSON.stringify({jsonrpc:"2.0",id:-100,result:{wrong:true}}));
+   socket.send(JSON.stringify({jsonrpc:"2.0",method:"notifications/progress",params:{progressToken:"token",progress:1}}));
+  } else if (message.method === "notifications/cancelled") {
+   assert.equal(message.params.requestId,id);
+   socket.send(JSON.stringify({jsonrpc:"2.0",id,result:{cancelled:true}}));
+  }
+ }); });
+ await new Promise(resolve => server.listen(0,"127.0.0.1",resolve));
+ const manager = new UnrealInstanceManager(); const controller = new AbortController(); let count = 0;
+ try {
+  const result = await manager.forwardToolCallToPort(server.address().port,{name:"GetEditorOperation",_meta:{nexusSessionId:"wire-test"}},3000,"127.0.0.1",event => {
+   assert.equal(event.method,"notifications/progress"); count++; controller.abort();
+  },controller.signal);
+  assert.equal(result.status,"ok"); assert.equal(result.response.result.cancelled,true); assert.equal(count,1);
+ } finally {
+  manager.dispose(); for(const socket of ws.clients) socket.terminate();
+  await new Promise(resolve => ws.close(resolve)); await new Promise(resolve => server.close(resolve));
+ }
+}
+
+Promise.all([testEditorOperationWire(), testDispatcherRouting(), testPauseCancellation(), testPausedHttpLifecycle(), testToolListReconnect()]).then(() => console.log("sessionPolicy, dispatcher routing, reconnect tool refresh and HTTP cancellation OK")).catch(error => {
     console.error(error);
     process.exitCode = 1;
 });

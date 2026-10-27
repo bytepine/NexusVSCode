@@ -243,7 +243,12 @@ export class NexusMcpHttpServer {
         res.once("close", cancel);
         if (shutdown.aborted) cancel();
         try {
-            const responseJson = await session.dispatcher.dispatch(body, controller.signal);
+            let streamed = false;
+            const responseJson = await session.dispatcher.dispatch(body, controller.signal, event => {
+                if (!req.headers.accept?.includes("text/event-stream") || res.destroyed) return;
+                if (!streamed) { res.writeHead(200, {"Content-Type":"text/event-stream", [MCP_SESSION_HEADER]:sessionId}); streamed = true; }
+                res.write(`data: ${JSON.stringify(event)}\n\n`);
+            });
             const failure = rpcFailure(responseJson);
             const timing = `elapsed_ms=${Date.now() - started}`;
             if (failure) logger.warn(`MCP 请求失败 ${fields} ${failure} ${timing}`);
@@ -255,6 +260,7 @@ export class NexusMcpHttpServer {
                 return;
             }
             if (shutdown.aborted) res.setHeader("Connection", "close");
+            if (streamed) { res.end(`data: ${responseJson}\n\n`); return; }
             res.setHeader(MCP_SESSION_HEADER, sessionId);
             if (!responseJson) {
                 res.writeHead(202);

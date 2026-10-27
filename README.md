@@ -8,6 +8,8 @@
 
 扩展负责自动发现 UE 实例、复制 AI 客户端配置和多实例切换；蓝图、资产、PIE 等能力由 NexusLink 提供。本地 MCP HTTP 端口默认 `:6900`，经 WebSocket 转发工具调用。
 
+编辑器长操作支持按会话查询、等待期间的 MCP 进度及取消等待；底层测试停止须显式请求，Live Coding 不承诺取消。任务状态不缓存，写操作断线不重试。
+
 四端端口与开关层数见 [NexusLink 使用指南](https://github.com/bytepine/NexusLink/blob/master/docs/usage-guide.md)。本扩展是三层开关中的 IDE 层。本机不要与 NexusDesktop / Rider 代理同时开。
 
 ---
