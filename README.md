@@ -4,7 +4,7 @@
 
 **在 VS Code / Cursor 中连接 AI 与 Unreal Engine。** NexusVSCode 是 [NexusLink — Unreal Engine MCP](https://github.com/bytepine/NexusLink) 的 IDE 客户端，在扩展商店名为 **Nexus MCP**。配合 UE 侧 NexusLink，可让 AI 读取项目、编辑资产和调试运行状态。
 
-[VS Marketplace](https://marketplace.visualstudio.com/items?itemName=byteyang.nexus-mcp-vscode) · [Open VSX](https://open-vsx.org/extension/byteyang/nexus-mcp-vscode) · [UE 插件（Fab：NexusMCP）](https://www.fab.com/listings/60097027-d7a5-4f73-87f3-81edb1b6ef0b) · [安装与使用](#安装与使用) · [下载 VSIX](https://github.com/bytepine/NexusVSCode/releases)
+[VS Marketplace](https://marketplace.visualstudio.com/items?itemName=byteyang.nexus-mcp-vscode) · [Open VSX](https://open-vsx.org/extension/byteyang/nexus-mcp-vscode) · [UE 插件（NexusLink）](https://github.com/bytepine/NexusLink) · [安装与使用](#安装与使用) · [下载 VSIX](https://github.com/bytepine/NexusVSCode/releases)
 
 扩展负责自动发现 UE 实例、复制 AI 客户端配置和多实例切换；蓝图、资产、PIE 等能力由 NexusLink 提供。本地 MCP HTTP 端口默认 `:6900`，经 WebSocket 转发工具调用。
 

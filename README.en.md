@@ -4,7 +4,7 @@
 
 **Connect AI clients to Unreal Engine from VS Code / Cursor.** NexusVSCode is the IDE integration for [NexusLink — Unreal Engine MCP](https://github.com/bytepine/NexusLink), listed as **Nexus MCP** in extension stores. With NexusLink installed in UE, AI clients can read project context, edit assets, and debug running sessions.
 
-[VS Marketplace](https://marketplace.visualstudio.com/items?itemName=byteyang.nexus-mcp-vscode) · [Open VSX](https://open-vsx.org/extension/byteyang/nexus-mcp-vscode) · [UE plugin on Fab (NexusMCP)](https://www.fab.com/listings/60097027-d7a5-4f73-87f3-81edb1b6ef0b) · [Install & use](#install--use) · [Download VSIX](https://github.com/bytepine/NexusVSCode/releases)
+[VS Marketplace](https://marketplace.visualstudio.com/items?itemName=byteyang.nexus-mcp-vscode) · [Open VSX](https://open-vsx.org/extension/byteyang/nexus-mcp-vscode) · [UE plugin (NexusLink)](https://github.com/bytepine/NexusLink) · [Install & use](#install--use) · [Download VSIX](https://github.com/bytepine/NexusVSCode/releases)
 
 The extension discovers UE instances, generates AI client configuration, and switches between projects. Blueprints, assets, PIE, and other engine capabilities come from NexusLink. The local MCP HTTP server defaults to `:6900` and forwards tool calls over WebSocket.
 

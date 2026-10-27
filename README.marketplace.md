@@ -2,7 +2,7 @@
 
 **Connect AI clients to Unreal Engine from VS Code / Cursor.** Nexus MCP is the IDE integration for [NexusLink — Unreal Engine MCP](https://github.com/bytepine/NexusLink). Use it with the UE plugin to inspect project context, work with Blueprints and materials, and debug running sessions through the Model Context Protocol (MCP).
 
-[UE plugin on Fab (NexusMCP)](https://www.fab.com/listings/60097027-d7a5-4f73-87f3-81edb1b6ef0b) · [Setup guide](https://github.com/bytepine/NexusLink/blob/master/README.en.md#quick-start) · [Extension source](https://github.com/bytepine/NexusVSCode) · [Report an issue](https://github.com/bytepine/NexusVSCode/issues)
+[UE plugin (NexusLink)](https://github.com/bytepine/NexusLink) · [Setup guide](https://github.com/bytepine/NexusLink/blob/master/README.en.md#quick-start) · [Extension source](https://github.com/bytepine/NexusVSCode) · [Report an issue](https://github.com/bytepine/NexusVSCode/issues)
 
 - **Find your UE project:** discover running Unreal Engine instances and switch between them from the status bar.
 - **Configure your AI client:** generate connection settings for Cursor / Windsurf, Claude Code / VS Code, CodeBuddy, Cline, or Roo Code.
@@ -10,9 +10,9 @@
 
 ## Requires the UE plugin
 
-[Fab (listed as NexusMCP)](https://www.fab.com/listings/60097027-d7a5-4f73-87f3-81edb1b6ef0b) · [NexusLink (GitHub)](https://github.com/bytepine/NexusLink) · [Download ZIP](https://github.com/bytepine/NexusLink/releases).
+[NexusLink (GitHub)](https://github.com/bytepine/NexusLink) · [Download ZIP](https://github.com/bytepine/NexusLink/releases).
 
-Install the UE plugin from Fab for your engine version, or extract a release ZIP into your project's `Plugins/` folder so that `Plugins/NexusLink/NexusLink.uplugin` exists. Enable NexusLink, then turn on *Editor Preferences > Plugins > NexusLink > Enable MCP Server*.
+Extract a release ZIP into your project's `Plugins/` folder so that `Plugins/NexusLink/NexusLink.uplugin` exists. Enable NexusLink, then turn on *Editor Preferences > Plugins > NexusLink > Enable MCP Server*.
 
 ## Getting started
 
@@ -42,7 +42,7 @@ Source & docs: [github.com/bytepine/NexusVSCode](https://github.com/bytepine/Nex
 
 **在 VS Code / Cursor 中连接 AI 与 Unreal Engine。** Nexus MCP 是 [NexusLink — Unreal Engine MCP](https://github.com/bytepine/NexusLink) 的 IDE 客户端。配合 UE 插件，通过 Model Context Protocol（MCP）让 AI 读取项目上下文、处理蓝图与材质，并调试运行状态。
 
-[UE 插件（Fab：NexusMCP）](https://www.fab.com/listings/60097027-d7a5-4f73-87f3-81edb1b6ef0b) · [安装指南](https://github.com/bytepine/NexusLink#快速开始) · [扩展源码](https://github.com/bytepine/NexusVSCode) · [问题反馈](https://github.com/bytepine/NexusVSCode/issues)
+[UE 插件（NexusLink）](https://github.com/bytepine/NexusLink) · [安装指南](https://github.com/bytepine/NexusLink#快速开始) · [扩展源码](https://github.com/bytepine/NexusVSCode) · [问题反馈](https://github.com/bytepine/NexusVSCode/issues)
 
 - **找到 UE 项目**：自动发现运行中的 Unreal Engine 实例，从状态栏切换目标项目。
 - **配置 AI 客户端**：为 Cursor / Windsurf、Claude Code / VS Code、CodeBuddy、Cline、Roo Code 生成连接配置。
@@ -50,9 +50,9 @@ Source & docs: [github.com/bytepine/NexusVSCode](https://github.com/bytepine/Nex
 
 ## 需配合 UE 插件
 
-[Fab（商品名 NexusMCP）](https://www.fab.com/listings/60097027-d7a5-4f73-87f3-81edb1b6ef0b) · [NexusLink（GitHub）](https://github.com/bytepine/NexusLink) · [下载 ZIP](https://github.com/bytepine/NexusLink/releases)。
+[NexusLink（GitHub）](https://github.com/bytepine/NexusLink) · [下载 ZIP](https://github.com/bytepine/NexusLink/releases)。
 
-从 Fab 安装适配引擎版本的 UE 插件；或将 Release ZIP 解压到项目 `Plugins/`，确认存在 `Plugins/NexusLink/NexusLink.uplugin`。启用 NexusLink 后，在 *Editor Preferences > Plugins > NexusLink > Enable MCP Server* 勾选开启。
+将 Release ZIP 解压到项目 `Plugins/`，确认存在 `Plugins/NexusLink/NexusLink.uplugin`。启用 NexusLink 后，在 *Editor Preferences > Plugins > NexusLink > Enable MCP Server* 勾选开启。
 
 ## 快速开始
 
