@@ -1,8 +1,12 @@
-# nexus-vscode — VSCode / Cursor MCP 代理扩展
+# Nexus MCP for Unreal Engine — VS Code / Cursor
 
 **语言 / Language**: **简体中文** · [English](README.en.md)
 
-VSCode / Cursor 端 MCP **代理**：本地 HTTP 服务器（默认 `:6900`），发现 UE 实例，经 WebSocket 把 AI 工具调用转发给 **NexusLink**。蓝图、资产、PIE 等能力由 UE 里提供，本扩展不实现游戏逻辑。
+**在 VS Code / Cursor 中连接 AI 与 Unreal Engine。** NexusVSCode 是 [NexusLink — Unreal Engine MCP](https://github.com/bytepine/NexusLink) 的 IDE 客户端，在扩展商店名为 **Nexus MCP**。配合 UE 侧 NexusLink，可让 AI 读取项目、编辑资产和调试运行状态。
+
+[VS Marketplace](https://marketplace.visualstudio.com/items?itemName=byteyang.nexus-mcp-vscode) · [Open VSX](https://open-vsx.org/extension/byteyang/nexus-mcp-vscode) · [UE 插件（Fab：NexusMCP）](https://www.fab.com/listings/60097027-d7a5-4f73-87f3-81edb1b6ef0b) · [安装与使用](#安装与使用) · [下载 VSIX](https://github.com/bytepine/NexusVSCode/releases)
+
+扩展负责自动发现 UE 实例、复制 AI 客户端配置和多实例切换；蓝图、资产、PIE 等能力由 NexusLink 提供。本地 MCP HTTP 端口默认 `:6900`，经 WebSocket 转发工具调用。
 
 四端端口与开关层数见 [NexusLink 使用指南](https://github.com/bytepine/NexusLink/blob/master/docs/usage-guide.md)。本扩展是三层开关中的 IDE 层。本机不要与 NexusDesktop / Rider 代理同时开。
 

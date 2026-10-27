@@ -7,6 +7,10 @@
 
 ## [Unreleased]
 
+### Changed
+
+- 扩展展示名增加 Unreal Engine，补充 NexusLink 搜索关键词与主页；统一中英文 README / 商店介绍，突出用途、UE 插件依赖与 Fab 安装入口。
+
 ## [2.3.0] - 2026-10-27
 
 ### Added

@@ -1,7 +1,7 @@
 {
   "name": "nexus-mcp-vscode",
-  "displayName": "Nexus MCP",
-  "description": "MCP proxy for VS Code / Cursor: auto-discovers UE instances and exposes NexusLink tools to AI clients",
+  "displayName": "Nexus MCP for Unreal Engine",
+  "description": "Connect AI to Unreal Engine with NexusLink. Discover UE instances, inspect assets and debug projects from VS Code / Cursor.",
   "version": "0.0.0",
   "publisher": "byteyang",
   "license": "MIT",
@@ -9,6 +9,10 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/bytepine/NexusVSCode"
+  },
+  "homepage": "https://github.com/bytepine/NexusLink",
+  "bugs": {
+    "url": "https://github.com/bytepine/NexusVSCode/issues"
   },
   "engines": {
     "vscode": "^1.85.0"
@@ -25,7 +29,10 @@
     "model context protocol",
     "ai",
     "cursor",
-    "game development"
+    "game development",
+    "nexuslink",
+    "unreal engine mcp",
+    "blueprint"
   ],
   "activationEvents": [
     "onStartupFinished"

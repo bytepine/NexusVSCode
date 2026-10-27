@@ -1,8 +1,12 @@
 **Language / Language**: [简体中文](README.md) · **English**
 
-# nexus-vscode — VSCode / Cursor MCP Proxy Extension
+# Nexus MCP for Unreal Engine — VS Code / Cursor
 
-VSCode / Cursor MCP **proxy**: local HTTP server (default `:6900`), discovers UE instances, and forwards AI tool calls to **NexusLink** over WebSocket. Blueprints, assets, PIE, and other capabilities come from the UE plugin; this extension does not implement game logic.
+**Connect AI clients to Unreal Engine from VS Code / Cursor.** NexusVSCode is the IDE integration for [NexusLink — Unreal Engine MCP](https://github.com/bytepine/NexusLink), listed as **Nexus MCP** in extension stores. With NexusLink installed in UE, AI clients can read project context, edit assets, and debug running sessions.
+
+[VS Marketplace](https://marketplace.visualstudio.com/items?itemName=byteyang.nexus-mcp-vscode) · [Open VSX](https://open-vsx.org/extension/byteyang/nexus-mcp-vscode) · [UE plugin on Fab (NexusMCP)](https://www.fab.com/listings/60097027-d7a5-4f73-87f3-81edb1b6ef0b) · [Install & use](#install--use) · [Download VSIX](https://github.com/bytepine/NexusVSCode/releases)
+
+The extension discovers UE instances, generates AI client configuration, and switches between projects. Blueprints, assets, PIE, and other engine capabilities come from NexusLink. The local MCP HTTP server defaults to `:6900` and forwards tool calls over WebSocket.
 
 Ports and switch layers: [NexusLink usage guide](https://github.com/bytepine/NexusLink/blob/master/docs/usage-guide.md). This extension is the IDE layer of the three-layer switch. Do not run NexusDesktop or the Rider proxy on the same machine at the same time.
 
