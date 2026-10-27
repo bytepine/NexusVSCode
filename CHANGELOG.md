@@ -7,13 +7,16 @@
 
 ## [Unreleased]
 
-### Changed
-
-- 客户端配置与 Desktop 对齐为六组八种客户端，包含 Codex TOML 与自动选择 Streamable HTTP；复制内容去除说明注释和冗余字段，按客户端提示粘贴位置。VSCode 保留原生选择菜单，复制 Token 后直接反馈，不再弹窗展示明文。
+## [2.3.0] - 2026-10-27
 
 ### Added
 
-- 代理回归覆盖旧/新工具清单重连刷新、认证字段、结构化错误透传及超时写请求不重试，并验证新工具实际转发到新的 UE 连接。
+- 客户端配置支持 Cursor / Windsurf、Codex、Claude Code / VS Code、CodeBuddy、Cline、Roo Code，相同格式合并显示；Codex 自动生成 Streamable HTTP 的 TOML 配置。
+
+### Changed
+
+- 配置向导先选客户端再选协议，单独提示粘贴位置，复制内容仅包含客户端配置。
+- 复制身份验证 Token 后直接显示成功提示，不再弹窗展示明文。
 
 ## [2.2.0] - 2026-10-23
 
