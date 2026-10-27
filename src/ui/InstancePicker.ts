@@ -1,6 +1,7 @@
 // Copyright byteyang. All Rights Reserved.
 
 import * as vscode from "vscode";
+import { buildMcpConfig, mcpClients, type McpProtocol } from "./mcpClientConfig";
 import type { UnrealInstanceManager } from "../unreal/UnrealInstanceManager";
 import { getConfig } from "../config/NexusLinkSettings";
 import { copyHostChoices, type LanIPv4 } from "../util/lanHost";
@@ -81,36 +82,9 @@ export async function showInstancePicker(manager: UnrealInstanceManager): Promis
     }
 }
 
-function mcpAuthHeaders(token: string, requireAuth: boolean): string {
-    if (!requireAuth || !token) return "";
-    return `,\n  "headers": {\n    "Authorization": "Bearer ${token}"\n  }`;
-}
-
-type McpProtocol = "stream" | "sse";
-type McpClient = "cursor" | "codebuddy";
-
-function buildMcpConfig(
-    protocol: McpProtocol,
-    client: McpClient,
-    port: number,
-    token: string,
-    host: string,
-    requireAuth: boolean,
-): string {
-    const headers = mcpAuthHeaders(token, requireAuth);
-    const path = protocol === "sse" ? "sse" : "stream";
-    if (client === "codebuddy") {
-        const extra = protocol === "stream"
-            ? `,\n  "transportType": "streamable-http",\n  "description": "NexusLink MCP Server for Unreal Engine",\n  "disabled": false${headers}`
-            : `,\n  "disabled": false${headers}`;
-        return `# ── CodeBuddy / Windsurf ──────────────────────────────────\n# 配置路径：自定义 MCP → 粘贴到 mcpServers 节点下\n"Nexus": {\n  "url": "http://${host}:${port}/${path}"${extra}\n}`;
-    }
-    return `# ── Cursor ────────────────────────────────────────────────\n# 配置路径：~/.cursor/mcp.json → mcpServers 节点下\n"nexus-unreal": {\n  "url": "http://${host}:${port}/${path}"${headers}\n}`;
-}
-
 /**
  * 复制 MCP 客户端配置：未启用代理时用设置端口，已启动则用实际监听端口。
- * 开 LAN 且多网卡时先选 IP，再选传输协议与客户端（Bearer 仅本机 token）。
+ * 开 LAN 且多网卡时先选 IP，再选客户端与传输协议（Bearer 仅本机 token）。
  */
 export async function copyMcpConfig(port: number, token: string): Promise<void> {
     const cfg = getConfig();
@@ -122,60 +96,49 @@ export async function copyMcpConfig(port: number, token: string): Promise<void> 
                 label: c.name,
                 description: c.address,
             })),
-            { title: "选择网卡 IP", placeHolder: "写入 mcp.json 的 url 主机" },
+            { title: "选择网卡 IP", placeHolder: "写入配置的服务器地址" },
         );
         if (!picked?.description) { return; }
         host = picked.description;
     }
 
-    const protoPick = await vscode.window.showQuickPick(
-        [
-            { label: "Streamable HTTP（推荐）", description: "/stream" },
-            { label: "SSE", description: "/sse" },
-        ],
-        { title: "选择 MCP 传输协议", placeHolder: "推荐 Streamable HTTP" },
-    );
-    if (!protoPick) { return; }
-    const protocol: McpProtocol = protoPick.label.startsWith("SSE") ? "sse" : "stream";
-
-    const clientPick = await vscode.window.showQuickPick(
-        [
-            { label: "Cursor", description: "~/.cursor/mcp.json → mcpServers" },
-            { label: "CodeBuddy", description: "自定义 MCP（含 Windsurf）" },
-        ],
-        { title: "选择 MCP 客户端", placeHolder: "一次只复制一份配置" },
-    );
-    if (!clientPick) { return; }
-    const client: McpClient = clientPick.label === "CodeBuddy" ? "codebuddy" : "cursor";
+    const clientPick = await vscode.window.showQuickPick(mcpClients, {
+        title: "选择 MCP 客户端", placeHolder: "相同配置格式合并显示；Codex 使用 TOML",
+    });
+    if (!clientPick) return;
+    const client = clientPick.id;
+    let protocol: McpProtocol = "stream";
+    if (client !== "codex") {
+        const protoPick = await vscode.window.showQuickPick(
+            [{ label: "Streamable HTTP（推荐）", id: "stream" as const }, { label: "SSE", id: "sse" as const }],
+            { title: "选择 MCP 传输协议", placeHolder: "推荐 Streamable HTTP" },
+        );
+        if (!protoPick) return;
+        protocol = protoPick.id;
+    }
 
     const config = buildMcpConfig(protocol, client, port, token, host, cfg.requireAuth);
     await vscode.env.clipboard.writeText(config);
     const protoLabel = protocol === "sse" ? "SSE" : "Streamable HTTP";
-    const clientLabel = client === "codebuddy" ? "CodeBuddy" : "Cursor";
+    const clientLabel = clientPick.label;
     const copied = cfg.enabled
         ? `已复制 ${clientLabel} 的 ${protoLabel} 配置`
         : `已复制 ${clientLabel} 的 ${protoLabel} 配置（尚未启用代理，AI 连接前请打开 nexusMcp.enabled）`;
-    const preview = await vscode.window.showInformationMessage(copied, "打开预览");
+    const preview = await vscode.window.showInformationMessage(`${copied}。${clientPick.detail}`, "打开预览");
     if (preview === "打开预览") {
-        const doc = await vscode.workspace.openTextDocument({ content: config, language: "plaintext" });
+        const doc = await vscode.workspace.openTextDocument({ content: config, language: client === "codex" ? "toml" : "plaintext" });
         await vscode.window.showTextDocument(doc, { preview: true });
     }
 }
 
 /**
- * 展示本机共享鉴权 token，可选一键复制（仅 token，不含 mcp.json）。
+ * 复制本机共享身份验证 token，通知中不展示凭证。
  */
 export async function showAndCopyAuthToken(token: string): Promise<void> {
     if (!token) {
         vscode.window.showWarningMessage("本机身份验证 Token 尚未生成");
         return;
     }
-    const pick = await vscode.window.showInformationMessage(
-        `本机身份验证 Token：${token}`,
-        { modal: true },
-        "复制",
-    );
-    if (pick === "复制") {
-        await vscode.env.clipboard.writeText(token);
-    }
+    await vscode.env.clipboard.writeText(token);
+    vscode.window.showInformationMessage("身份验证 Token 已复制");
 }

@@ -65,7 +65,7 @@ Released 2.x and current tool-call formats are supported without rewriting reque
 | `Nexus MCP: Refresh UE Instances` | Manual scan |
 | `Nexus MCP: Select UE Instance` | Pick and connect |
 | `Nexus MCP: Disconnect` | Close current WebSocket |
-| `Nexus MCP: 复制 MCP 客户端配置（mcp.json）` | See steps below |
+| `Nexus MCP: 复制 MCP 客户端配置` | See steps below |
 | `Nexus MCP: 复制鉴权 Token（Bearer）` | See steps below |
 | `Nexus MCP: Pause Agent Forwarding` | Queue remote calls at the proxy; do not send to UE |
 | `Nexus MCP: Resume Agent Forwarding` | Unpause |
@@ -74,17 +74,18 @@ A single instance auto-connects; multiple instances prefer `hostKind=Editor` (le
 
 ---
 
-## Copy mcp.json and auth
+## Copy client configuration and auth
 
 The same steps appear under **Enabled** / **Require Auth** in Settings (search `nexusMcp`); the descriptions include command links.
 
-### Copy MCP JSON
+### Copy MCP configuration (JSON / TOML)
 
-1. `Ctrl+Shift+P` → **Nexus MCP: 复制 MCP 客户端配置（mcp.json）** (works before the proxy is enabled; or click the status bar and pick the same item)
-2. Choose the transport (Streamable HTTP recommended), then the client (Cursor / CodeBuddy). If LAN is on and there are multiple NICs, pick the IP for the url first
+1. `Ctrl+Shift+P` → **Nexus MCP: 复制 MCP 客户端配置** (works before the proxy is enabled; or click the status bar and pick the same item)
+2. Choose the client, then the transport (Streamable HTTP recommended; automatic for Codex). If LAN is on and there are multiple NICs, pick the IP for the url first
 3. Paste into that AI client (one snippet per copy):
    - **Cursor**: `~/.cursor/mcp.json` → the `nexus-unreal` entry under `mcpServers`
-   - **CodeBuddy / Windsurf**: the `Nexus` entry under custom MCP
+   - **Codex**: `mcp_servers.nexus-unreal` in `~/.codex/config.toml` (or custom `CODEX_HOME`)
+   - **Other clients**: follow the placement instructions; format details for each group are below
 4. Optionally **Open preview** to review before pasting
 
 After pasting, set `nexusMcp.enabled` to `true` so the AI client can connect. Default `http://127.0.0.1:6900/stream`. If the server is already running, the snippet uses the real listen port. On collision, follow the status bar / startup notice. Legacy clients: pick SSE (`/sse`).
@@ -95,11 +96,13 @@ After pasting, set `nexusMcp.enabled` to `true` so the AI client can connect. De
 
 | Approach | Notes |
 |----------|-------|
-| Copy mcp.json (recommended) | The snippet already includes this machine's token in `headers` |
+| Copy client configuration (recommended) | The snippet includes the machine token in `headers` (`http_headers` for Codex) |
 | Token only | `Ctrl+Shift+P` → **Nexus MCP: 复制鉴权 Token（Bearer）** (also from the status bar when disabled) |
 | Turn auth off | Set `nexusMcp.requireAuth` to false and omit `headers` |
 
 Multiple tokens: `Bearer <tok1>, <tok2>`. The machine token is shared with UE / Desktop / Rider — do not put it in `extraAuthTokens`. See [usage-guide §1.1](https://github.com/bytepine/NexusLink/blob/master/docs/usage-guide.md#11-身份验证).
+
+Client presets match Desktop: **Cursor / Windsurf**, **Codex**, **Claude Code / VS Code**, **CodeBuddy**, **Cline**, and **Roo Code**. Identical formats share an option; placement instructions stay outside the copied configuration. Codex generates TOML for `~/.codex/config.toml` (or custom `CODEX_HOME`) and uses Streamable HTTP automatically; other clients generate JSON members. Claude Code uses `mcpServers` in `.mcp.json`; VS Code uses `servers` in `.vscode/mcp.json`. Replace an existing entry with the same name and preserve other settings.
 
 **Cursor** full-file example:
 

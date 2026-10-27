@@ -38,15 +38,15 @@
         "nexusMcp.enabled": {
           "type": "boolean",
           "default": false,
-          "description": "启用 Nexus MCP 代理服务器。复制 mcp.json：命令面板「Nexus MCP: 复制 MCP 客户端配置」；复制身份验证：命令面板「Nexus MCP: 复制身份验证 Token」。也可点状态栏。",
-          "markdownDescription": "启用 Nexus MCP 代理服务器（默认关；打开后监听下方端口）。\n\n**复制 mcp.json**：命令面板运行 [Nexus MCP: 复制 MCP 客户端配置](command:nexus.copyMcpConfig)（或点状态栏）。依次选传输协议与客户端（Cursor / CodeBuddy），把生成的一份片段贴进对应配置。\n\n**身份验证**：默认需要 `Authorization: Bearer`。配置片段已含本机 token；也可 [复制身份验证 Token](command:nexus.copyAuthToken)。关闭下方「Require Auth」后可不带 `headers`。"
+          "description": "启用 Nexus MCP 代理服务器。复制客户端配置：命令面板「Nexus MCP: 复制 MCP 客户端配置」；复制身份验证：命令面板「Nexus MCP: 复制身份验证 Token」。也可点状态栏。",
+          "markdownDescription": "启用 Nexus MCP 代理服务器（默认关；打开后监听下方端口）。\n\n**复制客户端配置**：命令面板运行 [Nexus MCP: 复制 MCP 客户端配置](command:nexus.copyMcpConfig)（或点状态栏）。Codex 输出 TOML 并自动使用 Streamable HTTP；其他客户端输出 JSON 片段。依次选客户端与传输协议（Cursor / Windsurf、Codex、Claude Code / VS Code、CodeBuddy、Cline、Roo Code），把生成的一份片段贴进对应配置。\n\n**身份验证**：默认需要 `Authorization: Bearer`。配置片段已含本机 token；也可 [复制身份验证 Token](command:nexus.copyAuthToken)。关闭下方「Require Auth」后可不带 `headers`。"
         },
         "nexusMcp.httpPort": {
           "type": "number",
           "default": 6900,
           "minimum": 1024,
           "maximum": 65535,
-          "description": "Streamable HTTP MCP 服务端口（AI 客户端通过此端口连接）。复制 mcp.json 时：已启动用实际端口，未启动用本设置。",
+          "description": "Streamable HTTP MCP 服务端口（AI 客户端通过此端口连接）。复制客户端配置 时：已启动用实际端口，未启动用本设置。",
           "markdownDescription": "Streamable HTTP MCP 服务端口（AI 客户端连此端口，默认 `6900`）。[复制 MCP 客户端配置](command:nexus.copyMcpConfig) 时：已启动用实际监听端口，未启动用本值写入 url。"
         },
         "nexusMcp.scanPortStart": {
@@ -85,13 +85,13 @@
         "nexusMcp.listenLan": {
           "type": "boolean",
           "default": false,
-          "description": "MCP HTTP 绑 0.0.0.0，允许局域网 AI 客户端连接（默认须 Bearer，可关身份验证；勿映射到公网）。复制 mcp.json 时多网卡会先选 IP。",
+          "description": "MCP HTTP 绑 0.0.0.0，允许局域网 AI 客户端连接（默认须 Bearer，可关身份验证；勿映射到公网）。复制客户端配置 时多网卡会先选 IP。",
           "markdownDescription": "MCP HTTP 绑 `0.0.0.0`，允许局域网 AI 客户端连接（默认须 Bearer；勿映射公网）。[复制 MCP 客户端配置](command:nexus.copyMcpConfig) 时若有多块网卡，会先选写入 url 的 IP。"
         },
         "nexusMcp.requireAuth": {
           "type": "boolean",
           "default": true,
-          "description": "AI 连接本代理是否校验 Bearer。默认开。复制 token：命令面板「Nexus MCP: 复制身份验证 Token」；复制 mcp.json 时片段已带 headers。关闭后无需 Authorization。连 UE 仍按对方 /status.authRequired。",
+          "description": "AI 连接本代理是否校验 Bearer。默认开。复制 token：命令面板「Nexus MCP: 复制身份验证 Token」；复制客户端配置 时片段已带 headers。关闭后无需 Authorization。连 UE 仍按对方 /status.authRequired。",
           "markdownDescription": "AI 连接本代理是否校验 Bearer（默认开）。\n\n- 复制 token：[Nexus MCP: 复制身份验证 Token](command:nexus.copyAuthToken)（或停用时点状态栏）\n- [复制 MCP 客户端配置](command:nexus.copyMcpConfig) 生成的片段已含 `Authorization: Bearer <本机 token>`\n- 关闭后与旧版相同（mcp.json 可不带 `headers`）\n- 连 UE 仍按对方 `/status.authRequired`"
         },
         "nexusMcp.extraAuthTokens": {
@@ -99,7 +99,7 @@
           "items": { "type": "string" },
           "default": [],
           "description": "额外身份验证 token（其他机器，每项一个或逗号分隔）。本机 token 用「复制身份验证 Token」，无需填在这里。AI Bearer 命中任一项即可。",
-          "markdownDescription": "额外身份验证 token（其他机器；每项一个或逗号分隔）。AI Bearer 命中任一项即可；连远程 UE 时也可作候选。\n\n**本机 token 不要填在这里**：用 [复制身份验证 Token](command:nexus.copyAuthToken)，或复制 mcp.json 时自动写入。本机 UE 自动读 `mcp-auth-token`。"
+          "markdownDescription": "额外身份验证 token（其他机器；每项一个或逗号分隔）。AI Bearer 命中任一项即可；连远程 UE 时也可作候选。\n\n**本机 token 不要填在这里**：用 [复制身份验证 Token](command:nexus.copyAuthToken)，或复制客户端配置 时自动写入。本机 UE 自动读 `mcp-auth-token`。"
         },
         "nexusMcp.remoteUnreal": {
           "type": "array",
@@ -135,7 +135,7 @@
       },
       {
         "command": "nexus.copyMcpConfig",
-        "title": "Nexus MCP: 复制 MCP 客户端配置（mcp.json）"
+        "title": "Nexus MCP: 复制 MCP 客户端配置"
       },
       {
         "command": "nexus.copyAuthToken",
@@ -156,6 +156,7 @@
     "watch": "npm run build -- --watch",
     "package": "vsce package",
     "lint": "tsc --noEmit",
+    "test:client-config": "esbuild scripts/test-client-config.cjs --bundle --outfile=dist/test-client-config.cjs --external:vscode --format=cjs --platform=node && node dist/test-client-config.cjs",
     "test:policy": "esbuild scripts/test-session-policy.cjs --bundle --outfile=dist/test-session-policy.cjs --external:vscode --format=cjs --platform=node && node dist/test-session-policy.cjs",
     "test:timing": "esbuild src/unreal/proxyTiming.ts --bundle --outfile=dist/proxyTiming.cjs --format=cjs --platform=node && node scripts/test-proxy-timing.cjs",
     "test:diagnostics": "esbuild scripts/test-diagnostics.cjs --bundle --outfile=dist/test-diagnostics.cjs --external:vscode --format=cjs --platform=node && node dist/test-diagnostics.cjs"

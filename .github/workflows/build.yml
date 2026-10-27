@@ -37,3 +37,4 @@ jobs:
           npm run test:policy
           npm run test:timing
           npm run test:diagnostics
+          npm run test:client-config
