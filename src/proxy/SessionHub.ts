@@ -140,10 +140,13 @@ export class SessionHub {
         }
         if ((stored as { isError?: boolean } | null)?.isError === true) return stored;
         const ttl = extractTtlMeta(stored, info.capability, nowMs);
-        if (contentTextLength(stored) > OFFLOAD_CHARS) {
+        const content = (stored as { content?: unknown } | null)?.content;
+        const hasImage = Array.isArray(content) && content.some(item =>
+            item && typeof item === "object" && (item as { type?: unknown }).type === "image");
+        if (contentTextLength(stored) > OFFLOAD_CHARS && !hasImage) {
             stored = this.offload(stored);
         }
-        if (!info.isWrite && !info.isBatch && info.capability) {
+        if (!info.isWrite && !info.isBatch && info.capability && !hasImage) {
             this.cache.set(info.exactKey, {
                 exactKey: info.exactKey,
                 identityKey: info.identityKey,

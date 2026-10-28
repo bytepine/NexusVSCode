@@ -21,6 +21,7 @@ Module._load = originalLoad;
 const {
     parseCall, needsGate, isWriteCapability, isDestructive, sectionsCovered,
     injectProxyMeta, extractTtlMeta, parseWriteGate, defaultTtlMs, isDurableRead,
+    OFFLOAD_CHARS,
 } = hubMod;
 const { SessionHub, wrapCached, wrapDegraded } = hubMod;
 
@@ -183,6 +184,18 @@ for (const name of fs.readdirSync(oldOffloadRoot)) fs.rmSync(path.join(oldOffloa
 assert.notEqual(path.dirname(path.dirname(file)), oldOffloadRoot);
 assert.ok(fs.existsSync(file), "old 2.x startup cleanup must not touch new payloads");
 assert.equal(hub.lookupFresh(offloadCall, now + 1001), null, "offloading must preserve original TTL metadata");
+
+const imageMetadata = { FilePath: "capture.png", Padding: "x".repeat(OFFLOAD_CHARS + 1) };
+const inlineImage = { type: "image", mimeType: "image/png", data: "aW1hZ2U=" };
+const imageCall = parseCall("GetAssetBlueprint", { AssetPath: "/Game/ImageProbe" });
+const imageResult = hub.store(imageCall, {
+    structuredContent: imageMetadata,
+    content: [{ type: "text", text: JSON.stringify(imageMetadata) }, inlineImage],
+}, now);
+assert.equal(imageResult.content.length, 2, "image results must remain inline");
+assert.deepEqual(imageResult.content[1], inlineImage, "image bytes and MIME must survive proxy forwarding");
+assert.equal(imageResult.structuredContent.FilePath, "capture.png", "image metadata must remain available");
+assert.equal(hub.lookupFresh(imageCall, now), null, "image results must not enter snapshot cache");
 
 async function testPauseCancellation() {
     const paused = new SessionHub();

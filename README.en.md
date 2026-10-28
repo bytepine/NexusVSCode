@@ -12,6 +12,8 @@ Ports and switch layers: [NexusLink usage guide](https://github.com/bytepine/Nex
 
 ---
 
+Standard MCP PNG/JPEG screenshot blocks stay inline with their FilePath metadata. Responses containing images bypass large-text offloading and proxy caching.
+
 ## Requirements
 
 | Component | Requirement |
