@@ -24,7 +24,7 @@ const STOP_PIE = new Set(["stop", "end", "quit", "endplay", "end_play", "end-pla
 // 路由与缓存共用同一清单；新增编辑器任务时需同步三端。
 const EDITOR_OPERATIONS = new Set([
     "GetEditorSlate", "CaptureEditorSlate", "InteractEditorSlate", "ControlEditorAutomation",
-    "ListEditorAutomationTests", "CompileEditorLiveCoding", "GetEditorOperation",
+    "ListEditorAutomationTests", "CompileEditorLiveCoding", "GetEditorOperation", "ControlEditorOperation",
     "GetEditorPCG", "ControlEditorPCG", "GetEditorNiagara", "ExecNiagaraStackFix", "SearchAssetsSemantic", "GetProjectSkills",
     "GetEditorAnimation", "ControlEditorAnimation", "ControlEditorNiagara", "ControlEditorGameFeature", "GetEditorScene", "ControlEditorScene",
 ]);

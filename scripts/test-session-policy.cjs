@@ -517,8 +517,9 @@ async function testEditorOperationRouting() {
         const owner = params._meta?.nexusSessionId ?? fallback;
         routes.push({ owner, cap, port });
         const id = args?.OperationId ?? String(owners.size);
-        const isError = cap === "GetEditorOperation" && owners.get(id) !== owner;
-        if (cap !== "GetEditorOperation") owners.set(id, owner);
+        const ownedCall = cap === "GetEditorOperation" || cap === "ControlEditorOperation";
+        const isError = ownedCall && owners.get(id) !== owner;
+        if (!ownedCall) owners.set(id, owner);
         return { status: "ok", response: { result: { isError, content: [{ type: "text", text: JSON.stringify({ OperationId: id }) }] } } };
     }
     const dispatchers = [new NexusMcpDispatcher(manager), new NexusMcpDispatcher(manager)];
@@ -542,6 +543,10 @@ async function testEditorOperationRouting() {
             assert.equal(routes[routes.length - 1].port, explicit ? 45001 : 45000);
             const foreign = await call(dispatchers[1], "GetEditorOperation", { OperationId: operation }, direct, explicit);
             assert.equal(foreign.result.isError, true, "operation identity must not cross MCP sessions");
+            const deniedStop = await call(dispatchers[1], "ControlEditorOperation", { OperationId: operation }, direct, explicit);
+            assert.equal(deniedStop.result.isError, true, "cancellation must reject another MCP session");
+            const stopped = await call(dispatchers[0], "ControlEditorOperation", { OperationId: operation }, direct, explicit);
+            assert.equal(stopped.result.isError, false, "cancellation must preserve the creator owner");
             const count = routes.length;
             await call(dispatchers[0], cap, {}, direct, explicit);
             assert.equal(routes.length, count + 1, cap + " must never reuse a task response from cache");
