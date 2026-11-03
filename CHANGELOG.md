@@ -7,6 +7,12 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- 补齐 PCG、Niagara、动画、Game Features、语义搜索、Skill 与场景等编辑器任务的会话转发，创建、查询和取消等待保持同一身份，任务响应不缓存且写入不重试。
+- 尊重上游显式 `TtlSeconds: 0`，兼容标准 `structuredContent`、文本 JSON 与旧字段，并清理同一读取对象的旧缓存和断线快照。
+- GameplayTags 等无法按资产定位的项目级写入按 UE 实例清理读缓存，部分失败仍失效，其他实例保持隔离。
+
 ## [2.3.1-beta.1] - 2026-10-28
 
 > ⚠️ Pre-release，非生产环境使用。

@@ -3,7 +3,7 @@ import { randomUUID } from "crypto";
 
 import type { UnrealInstanceManager, WsRequestResult } from "../unreal/UnrealInstanceManager";
 import { TOOLS_CALL_TIMEOUT_MS } from "../unreal/proxyTiming";
-import { explicitTargetPort, parseCall } from "../proxy/sessionPolicy";
+import { explicitTargetPort, isEditorOperation, parseCall } from "../proxy/sessionPolicy";
 import { deniedErrorData, wrapCached, wrapDegraded } from "../proxy/SessionHub";
 import { logger } from "../util/logger";
 import { logText } from "../util/diagnostics";
@@ -270,7 +270,7 @@ export class NexusMcpDispatcher {
         let callInfo = parseCall(toolName, args, this.unrealManager.cacheScope);
         const now = Date.now();
         const fresh = hub.lookupFresh(callInfo, now);
-        if (fresh && !isEditorOperation(callInfo.capability)) {
+        if (fresh) {
             return makeResult(id, wrapCached(fresh.result, fresh.kind, fresh.snapshotAt) as Record<string, unknown>);
         }
 
@@ -308,7 +308,7 @@ export class NexusMcpDispatcher {
         }
         if (outcome.status === "disconnected") {
             const snap = hub.lookupDegraded(callInfo, now);
-            if (snap && !isEditorOperation(callInfo.capability)) {
+            if (snap) {
                 logger.warn(`UE 未连接，返回缓存快照 tool=${logText(toolName)} capability=${logText(callInfo.capability)} snapshot=${logText(snap.snapshotAt)}`);
                 return makeResult(id, wrapDegraded(snap.result, snap.snapshotAt) as Record<string, unknown>);
             }
@@ -339,7 +339,7 @@ export class NexusMcpDispatcher {
             if (targetPort === undefined && callInfo.cacheScope !== this.unrealManager.cacheScope) {
                 return makeResult(id, response.result as Record<string, unknown>);
             }
-            const stored = isEditorOperation(callInfo.capability) ? response.result : hub.store(callInfo, response.result, now);
+            const stored = hub.store(callInfo, response.result, now);
             return makeResult(id, stored as Record<string, unknown>);
         }
         if (response.error !== undefined) {
@@ -437,8 +437,4 @@ function makeError(id: unknown, code: number, message: string, data?: Record<str
  */
 function attachCacheControl(result: Record<string, unknown>): void {
     result.cache_control = { type: "ephemeral" };
-}
-
-function isEditorOperation(name: string): boolean {
- return ["GetEditorSlate","CaptureEditorSlate","InteractEditorSlate","ControlEditorAutomation","ListEditorAutomationTests","CompileEditorLiveCoding","GetEditorOperation"].includes(name);
 }

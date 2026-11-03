@@ -21,6 +21,7 @@ import {
     extractTtlMeta,
     injectProxyMeta,
     isDurableRead,
+    isEditorOperation,
     needsGate,
     sectionsCovered,
     structuredCloneSafe,
@@ -117,12 +118,12 @@ export class SessionHub {
     }
 
     lookupFresh(info: CallInfo, nowMs: number): { result: unknown; kind: CacheKind; snapshotAt: string } | null {
-        if (info.isWrite || info.isBatch) return null;
+        if (info.isWrite || info.isBatch || isEditorOperation(info.capability)) return null;
         return this.lookup(info, nowMs, false);
     }
 
     lookupDegraded(info: CallInfo, nowMs: number): { result: unknown; snapshotAt: string } | null {
-        if (info.isWrite || info.isBatch) return null;
+        if (info.isWrite || info.isBatch || isEditorOperation(info.capability)) return null;
         const hit = this.lookup(info, nowMs, true);
         if (!hit) return null;
         return { result: hit.result, snapshotAt: hit.snapshotAt };
@@ -130,21 +131,24 @@ export class SessionHub {
 
     store(info: CallInfo, result: unknown, nowMs: number): unknown {
         let stored = structuredCloneSafe(result);
-        // 批量操作可能部分成功，先失效目标实例，避免保留旧快照。
-        if (info.isBatch) {
-            for (const [key, entry] of this.cache) {
-                if (entry.cacheScope === info.cacheScope) this.cache.delete(key);
-            }
-        } else if (info.isWrite && info.identity) {
-            this.invalidateIdentity(info.identity, info.cacheScope);
+        // 项目级写入无法按资产定位；部分失败也清理本实例，避免旧快照误导读回。
+        if (info.isBatch || info.isWrite) {
+            this.invalidateIdentity(info.isBatch ? "" : info.identity, info.cacheScope);
         }
-        if ((stored as { isError?: boolean } | null)?.isError === true) return stored;
+        if ((stored as { isError?: boolean } | null)?.isError === true || isEditorOperation(info.capability)) return stored;
         const ttl = extractTtlMeta(stored, info.capability, nowMs);
         const content = (stored as { content?: unknown } | null)?.content;
         const hasImage = Array.isArray(content) && content.some(item =>
             item && typeof item === "object" && (item as { type?: unknown }).type === "image");
         if (contentTextLength(stored) > OFFLOAD_CHARS && !hasImage) {
             stored = this.offload(stored);
+        }
+        if (ttl.ttlMs === 0) {
+            // 同一读取对象的旧 All/section/degraded 快照也不能继续复用。
+            for (const [key, entry] of this.cache) {
+                if (entry.identityKey === info.identityKey) this.cache.delete(key);
+            }
+            return stored;
         }
         if (!info.isWrite && !info.isBatch && info.capability && !hasImage) {
             this.cache.set(info.exactKey, {
@@ -204,7 +208,7 @@ export class SessionHub {
 
     private invalidateIdentity(identity: string, cacheScope: string): void {
         for (const [k, e] of this.cache) {
-            if (e.identity === identity && e.cacheScope === cacheScope) this.cache.delete(k);
+            if ((!identity || e.identity === identity) && e.cacheScope === cacheScope) this.cache.delete(k);
         }
     }
 

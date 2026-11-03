@@ -21,6 +21,17 @@ export const GATE_TIMEOUT_MS = 120_000;
 
 const DESTRUCTIVE_CAPS = new Set(["deleteasset", "renameasset"]);
 const STOP_PIE = new Set(["stop", "end", "quit", "endplay", "end_play", "end-play"]);
+// 路由与缓存共用同一清单；新增编辑器任务时需同步三端。
+const EDITOR_OPERATIONS = new Set([
+    "GetEditorSlate", "CaptureEditorSlate", "InteractEditorSlate", "ControlEditorAutomation",
+    "ListEditorAutomationTests", "CompileEditorLiveCoding", "GetEditorOperation",
+    "GetEditorPCG", "ControlEditorPCG", "GetEditorNiagara", "ExecNiagaraStackFix", "SearchAssetsSemantic", "GetProjectSkills",
+    "GetEditorAnimation", "ControlEditorAnimation", "ControlEditorNiagara", "ControlEditorGameFeature", "GetEditorScene", "ControlEditorScene",
+]);
+
+export function isEditorOperation(name: string): boolean {
+    return EDITOR_OPERATIONS.has(name);
+}
 
 export interface CallInfo {
     toolName: string;
@@ -233,7 +244,10 @@ export function extractResultText(result: unknown): { obj: Record<string, unknow
 
 export function extractTtlMeta(result: unknown, cap: string, nowMs: number): TtlMeta {
     const parsed = extractResultText(result);
-    const src = parsed?.obj ?? (result && typeof result === "object" ? result as Record<string, unknown> : {});
+    const envelope = result && typeof result === "object" ? result as Record<string, unknown> : {};
+    const structured = envelope.structuredContent;
+    const src = structured && typeof structured === "object" && !Array.isArray(structured)
+        ? structured as Record<string, unknown> : parsed?.obj ?? envelope;
     let snapshotAtMs = nowMs;
     let snapshotAtIso = new Date(nowMs).toISOString();
     const snap = src.SnapshotAt ?? src._snapshotAt;
@@ -246,7 +260,7 @@ export function extractTtlMeta(result: unknown, cap: string, nowMs: number): Ttl
     }
     let ttlMs = defaultTtlMs(cap);
     const ttlSec = src.TtlSeconds ?? src._ttl_seconds;
-    if (typeof ttlSec === "number" && Number.isFinite(ttlSec) && ttlSec > 0) {
+    if (typeof ttlSec === "number" && Number.isFinite(ttlSec) && ttlSec >= 0) {
         ttlMs = ttlSec * 1000;
     }
     return { snapshotAtMs, ttlMs, snapshotAtIso };

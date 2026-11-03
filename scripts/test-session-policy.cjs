@@ -461,6 +461,94 @@ async function testToolListReconnect() {
 }
 
 
+function testCacheContracts() {
+    for (const noCache of [
+        { content: [{ type: "text", text: '{"TtlSeconds":0}' }] },
+        { structuredContent: { TtlSeconds: 0 } },
+        { content: [{ type: "text", text: '{"_ttl_seconds":0}' }] },
+        { TtlSeconds: 0 },
+    ]) {
+        const cache = new SessionHub();
+        const read = parseCall("GetAssetBlueprint", { AssetPath: "/synthetic/BP", Sections: ["All"], targetPort: 45000 });
+        const subset = parseCall("GetAssetBlueprint", { AssetPath: "/synthetic/BP", Sections: ["Defaults"], targetPort: 45000 });
+        const other = parseCall("GetAssetBlueprint", { AssetPath: "/synthetic/BP", targetPort: 45001 });
+        for (const query of [read, subset, other]) cache.store(query, { content: [] }, 1000);
+        assert.equal(extractTtlMeta(noCache, read.capability, 1000).ttlMs, 0);
+        cache.store(subset, noCache, 1000);
+        for (const query of [read, subset]) {
+            assert.equal(cache.lookupFresh(query, 1000), null, "zero TTL must also bypass same-timestamp hits");
+            assert.equal(cache.lookupFresh(query, 1001), null, "zero TTL must clear previous exact/section reads");
+            assert.equal(cache.lookupDegraded(query, 100000), null);
+        }
+        assert.ok(cache.lookupFresh(other, 1001), "zero TTL must not clear another instance");
+        cache.dispose();
+    }
+    for (const isError of [false, true]) {
+        const cache = new SessionHub();
+        const read = parseCall("GetGameplayTags", { Sections: ["Hierarchy"], targetPort: 45000 });
+        const asset = parseCall("GetAssetBlueprint", { AssetPath: "/synthetic/BP", targetPort: 45000 });
+        const other = parseCall("GetGameplayTags", { targetPort: 45001 });
+        for (const query of [read, asset, other]) cache.store(query, { content: [] }, 1000);
+        const write = parseCall("ManageGameplayTags", { Tag: "Synthetic.Tag", Operations: [{ Action: "Remove" }], targetPort: 45000 });
+        cache.store(write, { isError }, 1001);
+        for (const query of [read, asset]) {
+            assert.equal(cache.lookupFresh(query, 1002), null, "project writes invalidate even on partial failure");
+            assert.equal(cache.lookupDegraded(query, 100000), null);
+        }
+        assert.ok(cache.lookupFresh(other, 1002), "project writes must keep other instances");
+        cache.dispose();
+    }
+}
+
+async function testEditorOperationRouting() {
+    const cache = new SessionHub();
+    const routes = [];
+    const owners = new Map();
+    const manager = {
+        sessionHub: cache, connectedPort: 45000, connectedHost: "127.0.0.1", cacheScope: "127.0.0.1:45000",
+        getProxyConfig: () => ({ localToolNames: [], connectionTools: [], initializePrefix: "test", errorMessages: {} }),
+        getUpstreamInstructions: () => "", maintainConnection: async () => {}, ensureLongConnection: async () => true,
+        forwardToolCall: async params => reply(params, "shared-websocket"),
+        forwardToolCallToPort: async (port, params) => reply(params, "temporary-websocket", port),
+    };
+    function reply(params, fallback, port = 45000) {
+        const cap = params.name === "CallCapability" ? params.arguments.Capability : params.name;
+        const args = params.name === "CallCapability" ? params.arguments.Arguments : params.arguments;
+        const owner = params._meta?.nexusSessionId ?? fallback;
+        routes.push({ owner, cap, port });
+        const id = args?.OperationId ?? String(owners.size);
+        const isError = cap === "GetEditorOperation" && owners.get(id) !== owner;
+        if (cap !== "GetEditorOperation") owners.set(id, owner);
+        return { status: "ok", response: { result: { isError, content: [{ type: "text", text: JSON.stringify({ OperationId: id }) }] } } };
+    }
+    const dispatchers = [new NexusMcpDispatcher(manager), new NexusMcpDispatcher(manager)];
+    let id = 1;
+    const call = async (dispatcher, cap, args, direct, explicit) => JSON.parse(await dispatcher.dispatch(JSON.stringify({ jsonrpc: "2.0", id: id++, method: "tools/call",
+        params: { name: direct ? cap : "CallCapability", arguments: { ...(direct ? args : { Capability: cap, Arguments: args }), ...(explicit ? { targetPort: 45001 } : {}) } } })));
+    try {
+        for (const dispatcher of dispatchers) {
+            await dispatcher.dispatch(JSON.stringify({ jsonrpc: "2.0", id: id++, method: "initialize" }));
+            await dispatcher.dispatch(JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized" }));
+        }
+        const capabilities = ["GetEditorSlate", "CaptureEditorSlate", "InteractEditorSlate", "ControlEditorAutomation", "ListEditorAutomationTests", "CompileEditorLiveCoding",
+            "GetEditorPCG", "ControlEditorPCG", "GetEditorNiagara", "ExecNiagaraStackFix", "SearchAssetsSemantic", "GetProjectSkills",
+            "GetEditorAnimation", "ControlEditorAnimation", "ControlEditorNiagara", "ControlEditorGameFeature", "GetEditorScene", "ControlEditorScene"];
+        for (const cap of capabilities) for (const direct of [false, true]) for (const explicit of [false, true]) {
+            const first = await call(dispatchers[0], cap, {}, direct, explicit);
+            const operation = JSON.parse(first.result.content[0].text).OperationId;
+            const query = await call(dispatchers[0], "GetEditorOperation", { OperationId: operation }, direct, explicit);
+            assert.equal(query.result.isError, false, cap + " must preserve its owner for polling");
+            assert.notEqual(routes[routes.length - 2].owner, "shared-websocket", cap + " must use the isolated route");
+            assert.equal(routes[routes.length - 1].port, explicit ? 45001 : 45000);
+            const foreign = await call(dispatchers[1], "GetEditorOperation", { OperationId: operation }, direct, explicit);
+            assert.equal(foreign.result.isError, true, "operation identity must not cross MCP sessions");
+            const count = routes.length;
+            await call(dispatchers[0], cap, {}, direct, explicit);
+            assert.equal(routes.length, count + 1, cap + " must never reuse a task response from cache");
+        }
+    } finally { cache.dispose(); }
+}
+
 async function testEditorOperationWire() {
  const http = require("http");
  const {WebSocketServer} = require("ws");
@@ -490,7 +578,8 @@ async function testEditorOperationWire() {
  }
 }
 
-Promise.all([testEditorOperationWire(), testDispatcherRouting(), testPauseCancellation(), testPausedHttpLifecycle(), testToolListReconnect()]).then(() => console.log("sessionPolicy, dispatcher routing, reconnect tool refresh and HTTP cancellation OK")).catch(error => {
+testCacheContracts();
+Promise.all([testEditorOperationRouting(), testEditorOperationWire(), testDispatcherRouting(), testPauseCancellation(), testPausedHttpLifecycle(), testToolListReconnect()]).then(() => console.log("sessionPolicy, dispatcher routing, reconnect tool refresh and HTTP cancellation OK")).catch(error => {
     console.error(error);
     process.exitCode = 1;
 });
