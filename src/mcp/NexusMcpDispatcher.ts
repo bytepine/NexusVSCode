@@ -269,6 +269,7 @@ export class NexusMcpDispatcher {
         const targetPort = explicitTargetPort(args);
         let callInfo = parseCall(toolName, args, this.unrealManager.cacheScope);
         const now = Date.now();
+        const cacheGeneration = hub.cacheGeneration();
         const fresh = hub.lookupFresh(callInfo, now);
         if (fresh) {
             return makeResult(id, wrapCached(fresh.result, fresh.kind, fresh.snapshotAt) as Record<string, unknown>);
@@ -283,6 +284,7 @@ export class NexusMcpDispatcher {
             const {targetPort: _port, targetHost: _host, ...rest} = args ?? {};
             forwardParams.arguments = rest;
             if (targetPort === undefined) await this.unrealManager.ensureLongConnection();
+            callInfo = parseCall(toolName, args, this.unrealManager.cacheScope);
             const controller = this.operationRequests.get(JSON.stringify(id));
             outcome = await this.unrealManager.forwardToolCallToPort(targetPort ?? this.unrealManager.connectedPort,
                 forwardParams, TOOLS_CALL_TIMEOUT_MS, typeof args?.targetHost === "string" ? args.targetHost : this.unrealManager.connectedHost,
@@ -336,10 +338,10 @@ export class NexusMcpDispatcher {
         const response = outcome.response;
         if (response.result !== undefined) {
             // 调用等待期间切换了长连接时，不能把旧实例响应存入新实例缓存。
-            if (targetPort === undefined && callInfo.cacheScope !== this.unrealManager.cacheScope) {
+            if (!isEditorOperation(callInfo.capability) && targetPort === undefined && callInfo.cacheScope !== this.unrealManager.cacheScope) {
                 return makeResult(id, response.result as Record<string, unknown>);
             }
-            const stored = hub.store(callInfo, response.result, now);
+            const stored = hub.store(callInfo, response.result, now, cacheGeneration);
             return makeResult(id, stored as Record<string, unknown>);
         }
         if (response.error !== undefined) {

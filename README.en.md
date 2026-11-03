@@ -64,6 +64,8 @@ Cross-machine and auth (switches, extra tokens, local file): [usage-guide §1](h
 
 The status bar always shows the connected project name or disconnected. The tooltip also indicates when agent forwarding is paused; click to switch instances or copy MCP config.
 
+While an asynchronous editor write is running, its UE instance bypasses read caches and disconnected snapshots. Caching resumes with a clean snapshot only after all known writes reach an observed terminal state, including failure or cancellation; cancelling a wait does not resume caching. Unobserved tasks and tracking overflow keep caching disabled conservatively; restart the proxy to reset this fallback.
+
 Batch calls and project-wide writes without an asset identity, including GameplayTags changes and partial failures, invalidate the target UE instance's read cache while preserving other instances. An explicit upstream `TtlSeconds: 0` disables caching and clears older snapshots for the same read target, including disconnected snapshots; both standard `structuredContent` and text JSON are supported. Failed reads are never cached. Large-response files are isolated between hubs; only files older than one hour are cleaned up. Client disconnection, disabling the extension, or restarting the proxy cancels queued requests; resuming forwarding will not replay them.
 
 Released 2.x and current tool-call formats are supported without rewriting requests. New payloads use a separate temporary root so older 2.x processes cannot delete them during startup cleanup.

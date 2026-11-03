@@ -8,7 +8,7 @@
 
 扩展负责自动发现 UE 实例、复制 AI 客户端配置和多实例切换；蓝图、资产、PIE 等能力由 NexusLink 提供。本地 MCP HTTP 端口默认 `:6900`，经 WebSocket 转发工具调用。
 
-编辑器长操作（Slate、Automation、PCG、Niagara、动画、Game Features、语义搜索与场景等）的创建、查询和取消等待共用 MCP 会话身份，并支持进度通知。GetEditorOperation 可列举所属任务，ControlEditorOperation 可取消支持停止的所属任务，两者沿用同一会话路由。任务响应不缓存，任务写入断线不重试；Live Coding 不承诺取消。
+编辑器长操作（Slate、Automation、PCG、Niagara、动画、Game Features、语义搜索与场景等）的创建、查询和取消等待共用 MCP 会话身份，并支持进度通知。GetEditorOperation 可列举所属任务，ControlEditorOperation 可取消支持停止的所属任务，两者沿用同一会话路由。任务响应不缓存，任务写入断线不重试；异步写任务运行期间禁用目标实例的读缓存与断线快照，查询到所有已知写任务终态（包括失败、取消）后清理缓存并恢复，取消等待不会提前恢复。未查询到终态时保持禁缓存；跟踪超限时保守停缓存，重启代理可恢复。Live Coding 不承诺取消。
 
 四端端口与开关层数见 [NexusLink 使用指南](https://github.com/bytepine/NexusLink/blob/master/docs/usage-guide.md)。本扩展是三层开关中的 IDE 层。本机不要与 NexusDesktop / Rider 代理同时开。
 

@@ -19,6 +19,7 @@ import {
     contentTextLength,
     degradedNote,
     extractTtlMeta,
+    extractResultText,
     injectProxyMeta,
     isDurableRead,
     isEditorOperation,
@@ -53,6 +54,10 @@ export class SessionHub {
     private disposed = false;
     private readonly pauseWaiters = new Set<(resumed: boolean) => void>();
     private readonly cache = new Map<string, CacheEntry>();
+    private readonly pendingEditorWrites = new Map<string, Set<string> | null>();
+    private cacheDisabled = false;
+    // 写入失效前发出的读取即使晚到，也不能重新填回旧快照。
+    private cacheEpoch = 0;
     private readonly offloadDir = path.join(OFFLOAD_DIR, randomUUID());
     private gatePrompter: GatePrompter | null = null;
 
@@ -97,6 +102,7 @@ export class SessionHub {
         for (const cancel of this.pauseWaiters) cancel(false);
         this.gatePrompter = null;
         this.cache.clear();
+        this.pendingEditorWrites.clear();
     }
 
     async confirmIfNeeded(info: CallInfo): Promise<GateDecision> {
@@ -129,13 +135,19 @@ export class SessionHub {
         return { result: hit.result, snapshotAt: hit.snapshotAt };
     }
 
-    store(info: CallInfo, result: unknown, nowMs: number): unknown {
+    cacheGeneration(): number { return this.cacheEpoch; }
+
+    store(info: CallInfo, result: unknown, nowMs: number, generation?: number): unknown {
         let stored = structuredCloneSafe(result);
+        if (isEditorOperation(info.capability)) {
+            this.observeEditorOperation(info, stored);
+            return stored;
+        }
         // 项目级写入无法按资产定位；部分失败也清理本实例，避免旧快照误导读回。
         if (info.isBatch || info.isWrite) {
             this.invalidateIdentity(info.isBatch ? "" : info.identity, info.cacheScope);
         }
-        if ((stored as { isError?: boolean } | null)?.isError === true || isEditorOperation(info.capability)) return stored;
+        if ((stored as { isError?: boolean } | null)?.isError === true) return stored;
         const ttl = extractTtlMeta(stored, info.capability, nowMs);
         const content = (stored as { content?: unknown } | null)?.content;
         const hasImage = Array.isArray(content) && content.some(item =>
@@ -150,7 +162,8 @@ export class SessionHub {
             }
             return stored;
         }
-        if (!info.isWrite && !info.isBatch && info.capability && !hasImage) {
+        if (!info.isWrite && !info.isBatch && info.capability && !hasImage && !this.cacheBlocked(info.cacheScope)
+            && (generation === undefined || generation === this.cacheEpoch)) {
             this.cache.set(info.exactKey, {
                 exactKey: info.exactKey,
                 identityKey: info.identityKey,
@@ -173,6 +186,7 @@ export class SessionHub {
         nowMs: number,
         allowExpired: boolean,
     ): { result: unknown; kind: CacheKind; snapshotAt: string } | null {
+        if (this.cacheBlocked(info.cacheScope)) return null;
         const exact = this.cache.get(info.exactKey);
         if (exact && this.usable(exact, nowMs, allowExpired, info.capability)) {
             this.touch(exact);
@@ -194,6 +208,48 @@ export class SessionHub {
         return null;
     }
 
+    private cacheBlocked(scope: string): boolean {
+        return this.cacheDisabled || this.pendingEditorWrites.has(scope);
+    }
+
+    private observeEditorOperation(info: CallInfo, result: unknown): void {
+        const envelope = result as Record<string, unknown> | null;
+        const structured = envelope?.structuredContent;
+        const source = structured && typeof structured === "object" && !Array.isArray(structured)
+            ? structured as Record<string, unknown> : extractResultText(result)?.obj ?? envelope ?? {};
+        if (info.isWrite) this.invalidateIdentity("", info.cacheScope);
+        const observe = (snapshot: Record<string, unknown>): void => {
+            const id = snapshot.OperationId, state = snapshot.State;
+            if (typeof id !== "string" || !id) return;
+            if (info.isWrite && state === "Running" && !this.cacheDisabled) {
+                if (!this.pendingEditorWrites.has(info.cacheScope)) {
+                    // ponytail: 跟踪有界；超限后保守停缓存，重启代理恢复，不能驱逐尚未确认结束的写入。
+                    if (this.pendingEditorWrites.size >= MAX_CACHE_ENTRIES) {
+                        this.cacheDisabled = true;
+                        this.pendingEditorWrites.clear();
+                        this.cache.clear();
+                        return;
+                    }
+                    this.pendingEditorWrites.set(info.cacheScope, new Set());
+                }
+                const pending = this.pendingEditorWrites.get(info.cacheScope);
+                if (pending && pending.size >= 128 && !pending.has(id)) this.pendingEditorWrites.set(info.cacheScope, null);
+                else pending?.add(id);
+            } else if (["Completed", "Failed", "Cancelled", "Interrupted"].includes(String(state))) {
+                const pending = this.pendingEditorWrites.get(info.cacheScope);
+                if (pending?.delete(id)) {
+                    this.invalidateIdentity("", info.cacheScope);
+                    if (!pending.size) this.pendingEditorWrites.delete(info.cacheScope);
+                }
+            }
+        };
+        observe(source);
+        const defaults = source.Operations_defaults as Record<string, unknown> | undefined;
+        if (Array.isArray(source.Operations)) {
+            for (const item of source.Operations) if (item && typeof item === "object") observe({ ...defaults, ...item });
+        }
+    }
+
     private usable(entry: CacheEntry, nowMs: number, allowExpired: boolean, cap: string): boolean {
         const fresh = nowMs - entry.storedAtMs <= entry.ttlMs;
         if (fresh) return true;
@@ -207,6 +263,7 @@ export class SessionHub {
     }
 
     private invalidateIdentity(identity: string, cacheScope: string): void {
+        ++this.cacheEpoch;
         for (const [k, e] of this.cache) {
             if ((!identity || e.identity === identity) && e.cacheScope === cacheScope) this.cache.delete(k);
         }

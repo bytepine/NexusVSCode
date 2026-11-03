@@ -554,6 +554,58 @@ async function testEditorOperationRouting() {
     } finally { cache.dispose(); }
 }
 
+function testAsyncEditorWriteCache() {
+    for (const format of ["text", "structured", "root"]) for (const terminal of ["Completed", "Failed", "Cancelled", "Interrupted"]) {
+        const hub = new SessionHub();
+        const read = parseCall("GetAssetMaterial", { AssetPath: "/synthetic/M", targetPort: 45000 });
+        const other = parseCall("GetAssetMaterial", { AssetPath: "/synthetic/M", targetPort: 45001 });
+        const write = parseCall("ControlEditorNiagara", { targetPort: 45000 });
+        const poll = parseCall("GetEditorOperation", { targetPort: 45000, OperationId: "a", WaitSeconds: 30 });
+        const payload = (source, isError = false) => format === "structured" ? { isError, structuredContent: source }
+            : format === "text" ? { isError, content: [{ type: "text", text: JSON.stringify(source) }] } : { ...source, isError };
+        const operation = (id, state, extra = {}) => payload({ OperationId: id, State: state, TtlSeconds: 0, ...extra }, state === "Failed");
+        try {
+            for (const query of [read, other]) hub.store(query, payload({ Value: "before" }), 1000);
+            hub.store(write, operation("a", "Running"), 1001);
+            hub.store(write, operation("b", "Running"), 1001);
+            const inFlightGeneration = hub.cacheGeneration();
+            hub.store(read, payload({ Value: "intermediate" }), 1002);
+            assert.equal(hub.lookupFresh(read, 1003), null, "running writes must suppress cached reads before polling");
+            assert.equal(hub.lookupDegraded(read, 100000), null);
+            assert.ok(hub.lookupFresh(other, 1003), "pending writes must stay in their instance");
+            hub.store(poll, operation("a", "Running", { bWaitCancelled: true }), 1003);
+            hub.store(poll, operation("a", terminal), 1004);
+            hub.store(read, payload({ Value: "intermediate" }), 1005);
+            hub.store(parseCall("GetEditorOperation", { targetPort: 45001 }), operation("b", terminal), 1006);
+            assert.equal(hub.lookupFresh(read, 1007), null, "another task/session list/instance must not release pending writes");
+            hub.store(poll, payload({ Operations: [{ OperationId: "b" }], Operations_defaults: { State: terminal }, TtlSeconds: 0 }), 1008);
+            assert.equal(hub.lookupFresh(read, 1009), null, "terminal/list replies must not retain intermediate snapshots");
+            hub.store(read, payload({ Value: "late intermediate" }), 1002, inFlightGeneration);
+            assert.equal(hub.lookupFresh(read, 1009), null, "a read issued before completion must not refill caches after the terminal reply");
+            hub.store(read, payload({ Value: "after" }), 1010);
+            assert.ok(hub.lookupFresh(read, 1011), "the last observed terminal task must restore caching");
+            hub.store(write, operation("waited", terminal), 1012);
+            assert.equal(hub.lookupFresh(read, 1013), null, "a write completing inside its initial wait still invalidates snapshots");
+            hub.store(read, payload({ Value: "after-wait" }), 1014);
+            assert.ok(hub.lookupFresh(read, 1015));
+        } finally { hub.dispose(); }
+    }
+    const hub = new SessionHub();
+    const read = parseCall("GetAssetMaterial", { AssetPath: "/synthetic/M", targetPort: 45000 });
+    const other = parseCall("GetAssetMaterial", { AssetPath: "/synthetic/M", targetPort: 45001 });
+    const write = parseCall("InteractEditorSlate", { targetPort: 45000 });
+    for (let i = 0; i < 129; i++) hub.store(write, { OperationId: String(i), State: "Running" }, 1000);
+    for (let i = 0; i < 129; i++) hub.store(parseCall("GetEditorOperation", { targetPort: 45000 }), { OperationId: String(i), State: "Completed" }, 1001);
+    hub.store(read, { Value: "unknown" }, 1002);
+    hub.store(other, { Value: "other" }, 1002);
+    assert.equal(hub.lookupFresh(read, 1003), null, "tracking overflow must remain conservative");
+    assert.ok(hub.lookupFresh(other, 1003), "single-instance overflow must preserve other instances");
+    for (let i = 1; i <= 64; i++) hub.store(parseCall("InteractEditorSlate", { targetPort: 45000 + i }), { OperationId: "pending", State: "Running" }, 1004);
+    hub.store(other, { Value: "unknown" }, 1005);
+    assert.equal(hub.lookupFresh(other, 1006), null, "global tracking overflow must fail closed");
+    hub.dispose();
+}
+
 async function testEditorOperationWire() {
  const http = require("http");
  const {WebSocketServer} = require("ws");
@@ -584,6 +636,7 @@ async function testEditorOperationWire() {
 }
 
 testCacheContracts();
+testAsyncEditorWriteCache();
 Promise.all([testEditorOperationRouting(), testEditorOperationWire(), testDispatcherRouting(), testPauseCancellation(), testPausedHttpLifecycle(), testToolListReconnect()]).then(() => console.log("sessionPolicy, dispatcher routing, reconnect tool refresh and HTTP cancellation OK")).catch(error => {
     console.error(error);
     process.exitCode = 1;
