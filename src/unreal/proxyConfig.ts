@@ -29,7 +29,7 @@ export const DEFAULT_PROXY_CONFIG: ProxyConfig = {
         "NexusLink MCP Proxy for Unreal Engine.",
         "MUST USE MCP when user mentions UE/Unreal/蓝图/Blueprint/资产/Widget/UMG/材质/PIE/Actor/GAS etc.",
         "Do NOT guess /Game/ paths or answer from repo grep alone.",
-        "If tools/list has UE tools → call directly; if only list/connect → list → connect → search_capabilities.",
+        "If tools/list has UE tools → call directly; if only list/connect → list → connect → SearchCapabilities.",
     ].join(" "),
     localToolNames: ["list_unreal_instances", "connect_unreal_instance"],
     connectionTools: [
