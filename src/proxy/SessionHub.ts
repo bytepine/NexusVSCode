@@ -31,6 +31,7 @@ import {
 export interface CacheEntry {
     exactKey: string;
     identityKey: string;
+    sectionKey: string;
     cacheScope: string;
     capability: string;
     identity: string;
@@ -167,6 +168,7 @@ export class SessionHub {
             this.cache.set(info.exactKey, {
                 exactKey: info.exactKey,
                 identityKey: info.identityKey,
+                sectionKey: info.sectionKey,
                 cacheScope: info.cacheScope,
                 capability: info.capability,
                 identity: info.identity,
@@ -194,7 +196,7 @@ export class SessionHub {
         }
         if (info.identity && info.sections) {
             for (const e of this.cache.values()) {
-                if (e.identityKey !== info.identityKey) continue;
+                if (e.sectionKey !== info.sectionKey) continue;
                 if (!sectionsCovered(e.sections, info.sections)) continue;
                 const withinWindow = nowMs - e.storedAtMs <= SECTION_WINDOW_MS;
                 if (!withinWindow && !allowExpired) continue;

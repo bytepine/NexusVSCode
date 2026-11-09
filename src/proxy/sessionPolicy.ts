@@ -41,6 +41,7 @@ export interface CallInfo {
     sections: string[] | null;
     exactKey: string;
     identityKey: string;
+    sectionKey: string;
     cacheScope: string;
     isWrite: boolean;
     isBatch: boolean;
@@ -219,8 +220,11 @@ export function parseCall(toolName: string, args?: Record<string, unknown>, inst
     const sections = extractSections(inner, legacy);
     const exactKey = JSON.stringify([cacheScope, toolName, capability, stableStringify(inner)]);
     const identityKey = JSON.stringify([cacheScope, capability, identity]);
+    const sectionArgs = { ...inner };
+    delete sectionArgs[legacy ? "sections" : "Sections"];
+    const sectionKey = JSON.stringify([cacheScope, toolName, capability, stableStringify(sectionArgs)]);
     const write = isBatch || isWriteCapability(capability);
-    return { toolName, capability, innerArgs: inner, identity, sections, exactKey, identityKey, cacheScope, isWrite: write, isBatch };
+    return { toolName, capability, innerArgs: inner, identity, sections, exactKey, identityKey, sectionKey, cacheScope, isWrite: write, isBatch };
 }
 
 export function parseJsonObject(text: string): Record<string, unknown> | null {

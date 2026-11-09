@@ -107,6 +107,17 @@ hub.store(allCall, payload, now);
 const sectionHit = hub.lookupFresh(subset, now + 1000);
 ok(sectionHit && sectionHit.kind === "section_hit");
 
+const componentHub = new SessionHub();
+const componentRead = (component, property, sections) => parseCall("GetAssetBlueprint", {
+    AssetPath: "/Game/BP", ComponentName: component, PropertyPaths: [property], Sections: sections,
+});
+componentHub.store(componentRead("Capsule", "CollisionEnabled", ["All"]), payload, now);
+assert.ok(componentHub.lookupFresh(componentRead("Capsule", "CollisionEnabled", ["Component"]), now + 1));
+for (const request of [componentRead("Mesh", "CollisionEnabled", ["Component"]), componentRead("Capsule", "bGenerateOverlapEvents", ["Component"])]) {
+    assert.equal(componentHub.lookupFresh(request, now + 1), null, "section cache must isolate read options");
+    assert.equal(componentHub.lookupDegraded(request, now + 100000), null, "degraded cache must isolate read options");
+}
+
 const wrapped = wrapCached(payload, "hit", "t");
 const text = wrapped.content[0].text;
 ok(text.includes('"_proxy"') && text.includes('"cache":"hit"'));
