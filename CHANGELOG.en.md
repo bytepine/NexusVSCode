@@ -12,6 +12,7 @@ Version numbers follow [Semantic Versioning](https://semver.org/).
 ### Fixed
 
 - English documentation in extension packages links to the Chinese page correctly. Both changelogs retain the latest five released versions during packaging, and source documents are restored afterward.
+- Ordinary writes are no longer replayed after disconnection. Disconnected or timed-out writes report an unknown execution status with automatic retry disabled and invalidate related old cache entries for the target instance, preventing duplicate changes and stale readbacks.
 
 ## [2.3.3] - 2026-11-10
 

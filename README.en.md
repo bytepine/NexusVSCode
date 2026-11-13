@@ -68,6 +68,8 @@ While an asynchronous editor write is running, its UE instance bypasses read cac
 
 Batch calls and project-wide writes without an asset identity, including GameplayTags changes and partial failures, invalidate the target UE instance's read cache while preserving other instances. An explicit upstream `TtlSeconds: 0` disables caching and clears older snapshots for the same read target, including disconnected snapshots; both standard `structuredContent` and text JSON are supported. Failed reads are never cached. Section caches and disconnected snapshots require all read arguments except `Sections` to match; they are not reused across components, property paths, filters, or default-value baselines. Large-response files are isolated between hubs; only files older than one hour are cleaned up. Client disconnection, disabling the extension, or restarting the proxy cancels queued requests; resuming forwarding will not replay them.
 
+Only read-only calls on the default connection reconnect and retry once after a disconnection; writes are never replayed automatically. A disconnected or timed-out write returns `error.data.executionStatus="unknown"` and `retryable=false`, because UE may have executed it, and invalidates related old cache entries for the target instance. Read back the actual UE state or query editor operation history before deciding whether to submit it again.
+
 Released 2.x and current tool-call formats are supported without rewriting requests. New payloads use a separate temporary root so older 2.x processes cannot delete them during startup cleanup.
 
 | Command (`Ctrl+Shift+P`) | Notes |

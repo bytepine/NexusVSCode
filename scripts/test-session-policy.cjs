@@ -396,6 +396,78 @@ async function testDispatcherRouting() {
     assert.equal(forwards, 9, "legacy batches must invalidate cached reads");
 }
 
+// 已执行却丢失响应时，代理不能再次发送写入，也不能继续提供写前快照。
+async function testDispatcherTransportFailures() {
+    const writes = [
+        { name: "CallCapability", arguments: { Capability: "ManageAssetBlueprint", Arguments: { AssetPath: "/synthetic/BP" } } },
+        { name: "call_capability", arguments: { capability: "manage_asset_blueprint", arguments: { assetPath: "/synthetic/BP" } } },
+        { name: "CallCapability", arguments: { Calls: [{ Capability: "ManageAssetBlueprint", Arguments: { AssetPath: "/synthetic/BP" } }] } },
+        { name: "CreateEditorOperation", arguments: { Action: "SaveAssets" } },
+    ];
+    const response = { status: "ok", response: { result: { content: [] } } };
+    for (const status of ["disconnected", "timeout"]) {
+        for (const params of writes) {
+            for (const explicit of [false, true]) {
+                const cache = new SessionHub();
+                let forwards = 0;
+                let reconnects = 0;
+                const scope = "127.0.0.1:45000";
+                const cachedRead = parseCall("GetAssetBlueprint", { AssetPath: "/synthetic/BP" }, scope);
+                const otherRead = parseCall("GetAssetBlueprint", { AssetPath: "/synthetic/BP" }, "127.0.0.1:45001");
+                cache.store(cachedRead, { content: [] }, Date.now());
+                cache.store(otherRead, { content: [] }, Date.now());
+                const forward = async () => {
+                    // 计数代表 UE 收到并执行；第一次结果在回程丢失。
+                    forwards++;
+                    return forwards === 1 ? { status } : response;
+                };
+                const manager = {
+                    sessionHub: cache, cacheScope: scope, connectedPort: 45000, connectedHost: "127.0.0.1",
+                    getProxyConfig: () => ({ localToolNames: [], connectionTools: [], initializePrefix: "test",
+                        errorMessages: { notConnected: "Not connected", timeoutHint: "Retry the query" } }),
+                    getUpstreamInstructions: () => "", maintainConnection: async () => {}, isWsOpen: () => false,
+                    fetchToolsList: async () => [], ensureLongConnection: async () => { reconnects++; return true; },
+                    forwardToolCall: forward, forwardToolCallToPort: forward,
+                    proxyFeedbackBuffer: { enqueue() {} }, flushProxyFeedback: async () => {},
+                };
+                const dispatcher = new NexusMcpDispatcher(manager);
+                await dispatcher.dispatch(JSON.stringify({ jsonrpc: "2.0", id: 1, method: "initialize" }));
+                await dispatcher.dispatch(JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized" }));
+                const request = { ...params, arguments: { ...params.arguments, ...(explicit ? { targetPort: 45000 } : {}) } };
+                const result = JSON.parse(await dispatcher.dispatch(JSON.stringify({ jsonrpc: "2.0", id: 2, method: "tools/call", params: request })));
+                assert.equal(forwards, 1, `${status} must not replay ${params.name} (explicit=${explicit})`);
+                assert.ok(reconnects <= 1, "failed writes must not reconnect for automatic replay");
+                assert.equal(result.error?.data?.errorKind, status === "timeout" ? "proxy_timeout" : "proxy_not_connected");
+                assert.equal(result.error?.data?.executionStatus, "unknown");
+                assert.equal(result.error?.data?.retryable, false);
+                assert.ok(result.error.message.includes("may have executed"), "write errors must explain the uncertain outcome");
+                assert.ok(!result.error.message.includes("Retry the query"), "write errors must not reuse the read retry hint");
+                assert.equal(cache.lookupFresh(cachedRead, Date.now()), null, "uncertain writes invalidate old reads");
+                assert.equal(cache.lookupDegraded(cachedRead, Date.now() + 100000), null, "uncertain writes invalidate offline snapshots");
+                assert.ok(cache.lookupFresh(otherRead, Date.now()), "uncertain writes preserve other instance caches");
+                cache.dispose();
+            }
+        }
+    }
+    let forwards = 0;
+    const cache = new SessionHub();
+    const manager = {
+        sessionHub: cache, cacheScope: "127.0.0.1:45000",
+        getProxyConfig: () => ({ localToolNames: [], connectionTools: [], initializePrefix: "test", errorMessages: {} }),
+        getUpstreamInstructions: () => "", maintainConnection: async () => {}, isWsOpen: () => false,
+        fetchToolsList: async () => [], ensureLongConnection: async () => true,
+        forwardToolCall: async () => ++forwards === 1 ? { status: "disconnected" } : response,
+    };
+    const dispatcher = new NexusMcpDispatcher(manager);
+    await dispatcher.dispatch(JSON.stringify({ jsonrpc: "2.0", id: 1, method: "initialize" }));
+    await dispatcher.dispatch(JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized" }));
+    const result = JSON.parse(await dispatcher.dispatch(JSON.stringify({ jsonrpc: "2.0", id: 2, method: "tools/call",
+        params: { name: "GetAssetBlueprint", arguments: { AssetPath: "/synthetic/BP" } } })));
+    assert.ok(result.result, "read-only calls still succeed after reconnect");
+    assert.equal(forwards, 2, "read-only calls retain one automatic retry");
+    cache.dispose();
+}
+
 async function testToolListReconnect() {
     const http = require("http");
     const { WebSocketServer } = require("ws");
@@ -403,6 +475,7 @@ async function testToolListReconnect() {
     const modernNames = ["SearchCapabilities", "CallCapability", "SubmitFeedback"];
     async function instance(names) {
         let calls = 0;
+        let dropNext = false;
         const server = http.createServer((req, res) => {
             res.setHeader("Content-Type", "application/json");
             res.end(JSON.stringify({ server: "NexusLink", wsPort: server.address().port }));
@@ -419,6 +492,11 @@ async function testToolListReconnect() {
                     return;
                 }
                 calls++;
+                if (dropNext) {
+                    dropNext = false;
+                    socket.terminate();
+                    return;
+                }
                 if (request.params.arguments?.ContractTimeout) return;
                 result = { content: [{ type: "text", text: "{}" }] };
                 if (request.params.arguments?.ContractFailure) result = { isError: true,
@@ -427,7 +505,7 @@ async function testToolListReconnect() {
             socket.send(JSON.stringify({ jsonrpc: "2.0", id: request.id, result }));
         }));
         await new Promise(resolve => server.listen(0, "127.0.0.1", resolve));
-        return { port: server.address().port, calls: () => calls, close: async () => {
+        return { port: server.address().port, calls: () => calls, dropNextResponse: () => { dropNext = true; }, close: async () => {
             for (const socket of ws.clients) socket.terminate();
             await new Promise(resolve => ws.close(resolve));
             await new Promise(resolve => server.close(resolve));
@@ -464,6 +542,12 @@ async function testToolListReconnect() {
             arguments: { Capability: "ManageAssetDataTable", ContractTimeout: true } }, 50);
         assert.equal(timedOut.status, "timeout");
         assert.equal(modern.calls(), 5, "failed and timed-out writes each reach UE once");
+        modern.dropNextResponse();
+        const disconnected = JSON.parse(await dispatcher.dispatch(JSON.stringify({ jsonrpc: "2.0", id: 5, method: "tools/call",
+            params: { name: "CallCapability", arguments: { Capability: "ManageAssetDataTable", Arguments: {} } } })));
+        assert.equal(disconnected.error?.data?.executionStatus, "unknown");
+        assert.equal(disconnected.error?.data?.retryable, false);
+        assert.equal(modern.calls(), 6, "a real WS close after execution must not replay the write");
     } finally {
         manager.dispose();
         await legacy.close();
@@ -648,7 +732,7 @@ async function testEditorOperationWire() {
 
 testCacheContracts();
 testAsyncEditorWriteCache();
-Promise.all([testEditorOperationRouting(), testEditorOperationWire(), testDispatcherRouting(), testPauseCancellation(), testPausedHttpLifecycle(), testToolListReconnect()]).then(() => console.log("sessionPolicy, dispatcher routing, reconnect tool refresh and HTTP cancellation OK")).catch(error => {
+Promise.all([testDispatcherTransportFailures(), testEditorOperationRouting(), testEditorOperationWire(), testDispatcherRouting(), testPauseCancellation(), testPausedHttpLifecycle(), testToolListReconnect()]).then(() => console.log("sessionPolicy, dispatcher routing, reconnect tool refresh and HTTP cancellation OK")).catch(error => {
     console.error(error);
     process.exitCode = 1;
 });

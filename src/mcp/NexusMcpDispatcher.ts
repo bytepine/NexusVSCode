@@ -300,7 +300,8 @@ export class NexusMcpDispatcher {
             await this.unrealManager.ensureLongConnection();
             callInfo = parseCall(toolName, args, this.unrealManager.cacheScope);
             outcome = await this.unrealManager.forwardToolCall(forwardParams);
-            if (outcome.status === "disconnected") {
+            // 已发出的写入可能已执行，仅只读请求允许断线重发。
+            if (outcome.status === "disconnected" && !callInfo.isWrite) {
                 if (await this.unrealManager.ensureLongConnection()) {
                     logger.info(`工具转发重连后重试 tool=${logText(toolName)} capability=${logText(callInfo.capability)}`);
                     callInfo = parseCall(toolName, args, this.unrealManager.cacheScope);
@@ -308,32 +309,43 @@ export class NexusMcpDispatcher {
                 }
             }
         }
+        const executionData = callInfo.isWrite ? { executionStatus: "unknown", retryable: false } : {};
+        if (callInfo.isWrite && outcome.status !== "ok") {
+            // 丢失响应不等于未执行；旧缓存和断线快照也必须按写入失效。
+            hub.store(callInfo, { isError: true }, now);
+        }
         if (outcome.status === "disconnected") {
             const snap = hub.lookupDegraded(callInfo, now);
             if (snap) {
                 logger.warn(`UE 未连接，返回缓存快照 tool=${logText(toolName)} capability=${logText(callInfo.capability)} snapshot=${logText(snap.snapshotAt)}`);
                 return makeResult(id, wrapDegraded(snap.result, snap.snapshotAt) as Record<string, unknown>);
             }
+            const message = callInfo.isWrite
+                ? "UE connection was lost. The write may have executed. Check the UE state or editor operation history before submitting it again."
+                : proxyConfig.errorMessages.notConnected;
             this.unrealManager.proxyFeedbackBuffer.enqueue({
                 category: "proxy_disconnect",
                 tool: toolName,
-                errorText: proxyConfig.errorMessages.notConnected,
+                errorText: message,
             });
             void this.unrealManager.flushProxyFeedback();
-            return makeError(id, INTERNAL_ERROR, proxyConfig.errorMessages.notConnected, {
-                errorKind: "proxy_not_connected",
+            return makeError(id, INTERNAL_ERROR, message, {
+                errorKind: "proxy_not_connected", ...executionData,
             });
         }
         if (outcome.status === "timeout") {
             const sec = Math.round(TOOLS_CALL_TIMEOUT_MS / 1000);
-            const message = `UE request timed out after ${sec}s. ${proxyConfig.errorMessages.timeoutHint}`;
+            const hint = callInfo.isWrite
+                ? "The write may have executed. Check the UE state or editor operation history before submitting it again."
+                : proxyConfig.errorMessages.timeoutHint;
+            const message = `UE request timed out after ${sec}s. ${hint}`;
             this.unrealManager.proxyFeedbackBuffer.enqueue({
                 category: "proxy_timeout",
                 tool: toolName,
                 errorText: message,
             });
             void this.unrealManager.flushProxyFeedback();
-            return makeError(id, INTERNAL_ERROR, message, { errorKind: "proxy_timeout" });
+            return makeError(id, INTERNAL_ERROR, message, { errorKind: "proxy_timeout", ...executionData });
         }
         const response = outcome.response;
         if (response.result !== undefined) {
