@@ -167,6 +167,8 @@ py scripts/build_vscode.py --version <version> --output release/
 
 提交前运行 `npm run lint`（TypeScript 类型检查）、`npm run test:policy`（会话策略、多实例转发及旧/新工具清单重连刷新回归）、`npm run test:timing` 和 `npm run test:diagnostics`（真实 HTTP 的会话并发、容量回收、主动结束及 INFO 日志与脱敏回归）。CI 将这些检查作为必过步骤。
 
+打包文档回归运行 `py -m unittest discover -s scripts -p 'test_build_vscode.py'`，验证包内语言跳转、中英文更新日志裁剪，以及成功或失败后源码文件的完整还原。
+
 GitHub Release 正文仅来自 `CHANGELOG.md`（`py scripts/extract_release_notes.py --version X.Y.Z --verify`）。tag：`nexus-vscode-vX.Y.Z`。商店详情页文案在 [README.marketplace.md](README.marketplace.md)，不与本 README 混用。
 
 源码：`src/`（入口 `extension.ts`）

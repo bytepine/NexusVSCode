@@ -1,4 +1,4 @@
-**Language / Language**: [简体中文](README.md) · **English**
+**语言 / Language**: [简体中文](README.md) · **English**
 
 # Nexus MCP for Unreal Engine — VS Code / Cursor
 
@@ -8,7 +8,7 @@
 
 The extension discovers UE instances, generates AI client configuration, and switches between projects. Blueprints, assets, PIE, and other engine capabilities come from NexusLink. The local MCP HTTP server defaults to `:6900` and forwards tool calls over WebSocket.
 
-Ports and switch layers: [NexusLink usage guide](https://github.com/bytepine/NexusLink/blob/master/docs/usage-guide.md). This extension is the IDE layer of the three-layer switch. Do not run NexusDesktop or the Rider proxy on the same machine at the same time.
+Ports and switch layers: [NexusLink usage guide](https://github.com/bytepine/NexusLink/blob/master/docs/usage-guide.en.md). This extension is the IDE layer of the three-layer switch. Do not run NexusDesktop or the Rider proxy on the same machine at the same time.
 
 ---
 
@@ -33,7 +33,7 @@ Standard MCP PNG/JPEG screenshot blocks stay inline with their FilePath metadata
 
 ### 1. UE prerequisites
 
-Install and enable NexusLink, then check **Enable MCP Server** ([usage-guide §2](https://github.com/bytepine/NexusLink/blob/master/docs/usage-guide.md)). Scans stay empty if unchecked.
+Install and enable NexusLink, then check **Enable MCP Server** ([usage-guide §2](https://github.com/bytepine/NexusLink/blob/master/docs/usage-guide.en.md)). Scans stay empty if unchecked.
 
 ### 2. Install this extension
 
@@ -58,7 +58,7 @@ Then **Settings** → search `nexusMcp` → **Nexus Mcp: Enabled** = `true` (def
 | `nexusMcp.extraAuthTokens` | `[]` | Tokens from other machines; not needed for local UE |
 | `nexusMcp.remoteUnreal` | `[]` | Remote UE: `{ host, mcpPort, authToken? }`; no subnet scan |
 
-Cross-machine and auth (switches, extra tokens, local file): [usage-guide §1](https://github.com/bytepine/NexusLink/blob/master/docs/usage-guide.md).
+Cross-machine and auth (switches, extra tokens, local file): [usage-guide §1](https://github.com/bytepine/NexusLink/blob/master/docs/usage-guide.en.md).
 
 ### 4. Status bar & commands
 
@@ -66,7 +66,7 @@ The status bar always shows the connected project name or disconnected. The tool
 
 While an asynchronous editor write is running, its UE instance bypasses read caches and disconnected snapshots. Caching resumes with a clean snapshot only after all known writes reach an observed terminal state, including failure or cancellation; cancelling a wait does not resume caching. Unobserved tasks and tracking overflow keep caching disabled conservatively; restart the proxy to reset this fallback.
 
-Batch calls and project-wide writes without an asset identity, including GameplayTags changes and partial failures, invalidate the target UE instance's read cache while preserving other instances. An explicit upstream `TtlSeconds: 0` disables caching and clears older snapshots for the same read target, including disconnected snapshots; both standard `structuredContent` and text JSON are supported. Failed reads are never cached. Large-response files are isolated between hubs; only files older than one hour are cleaned up. Client disconnection, disabling the extension, or restarting the proxy cancels queued requests; resuming forwarding will not replay them.
+Batch calls and project-wide writes without an asset identity, including GameplayTags changes and partial failures, invalidate the target UE instance's read cache while preserving other instances. An explicit upstream `TtlSeconds: 0` disables caching and clears older snapshots for the same read target, including disconnected snapshots; both standard `structuredContent` and text JSON are supported. Failed reads are never cached. Section caches and disconnected snapshots require all read arguments except `Sections` to match; they are not reused across components, property paths, filters, or default-value baselines. Large-response files are isolated between hubs; only files older than one hour are cleaned up. Client disconnection, disabling the extension, or restarting the proxy cancels queued requests; resuming forwarding will not replay them.
 
 Released 2.x and current tool-call formats are supported without rewriting requests. New payloads use a separate temporary root so older 2.x processes cannot delete them during startup cleanup.
 
@@ -80,7 +80,7 @@ Released 2.x and current tool-call formats are supported without rewriting reque
 | `Nexus MCP: Pause Agent Forwarding` | Queue remote calls at the proxy; do not send to UE |
 | `Nexus MCP: Resume Agent Forwarding` | Unpause |
 
-A single instance auto-connects; multiple instances prefer `hostKind=Editor` (legacy UE without that field falls back to `netRole=Editor`). Tool-list cache is kept across disconnects. Durable reads may return a snapshot with `_proxy.degraded`. Read caches and disconnected snapshots are isolated by UE host/port, so switching instances cannot reuse another instance's data. Session contract: [proxy-session.md](https://github.com/bytepine/NexusLink/blob/master/docs/proxy-session.md).
+A single instance auto-connects; multiple instances prefer `hostKind=Editor` (legacy UE without that field falls back to `netRole=Editor`). Tool-list cache is kept across disconnects. Durable reads may return a snapshot with `_proxy.degraded`. Read caches and disconnected snapshots are isolated by UE host/port, so switching instances cannot reuse another instance's data. Session contract: [proxy-session.md](https://github.com/bytepine/NexusLink/blob/master/docs/proxy-session.en.md).
 
 ---
 
@@ -90,7 +90,7 @@ The same steps appear under **Enabled** / **Require Auth** in Settings (search `
 
 ### Copy MCP configuration (JSON / TOML)
 
-1. `Ctrl+Shift+P` → **Nexus MCP: 复制 MCP 客户端配置** (works before the proxy is enabled; or click the status bar and pick the same item)
+1. `Ctrl+Shift+P` → **Nexus MCP: Copy MCP Client Configuration** (`复制 MCP 客户端配置`) (works before the proxy is enabled; or click the status bar and pick the same item)
 2. Choose the client, then the transport (Streamable HTTP recommended; automatic for Codex). If LAN is on and there are multiple NICs, pick the IP for the url first
 3. Paste into that AI client (one snippet per copy):
    - **Cursor**: `~/.cursor/mcp.json` → the `nexus-unreal` entry under `mcpServers`
@@ -107,10 +107,10 @@ After pasting, set `nexusMcp.enabled` to `true` so the AI client can connect. De
 | Approach | Notes |
 |----------|-------|
 | Copy client configuration (recommended) | The snippet includes the machine token in `headers` (`http_headers` for Codex) |
-| Token only | `Ctrl+Shift+P` → **Nexus MCP: 复制鉴权 Token（Bearer）** (also from the status bar when disabled) |
+| Token only | `Ctrl+Shift+P` → **Nexus MCP: Copy Auth Token** (`复制鉴权 Token（Bearer）`) (also from the status bar when disabled) |
 | Turn auth off | Set `nexusMcp.requireAuth` to false and omit `headers` |
 
-Multiple tokens: `Bearer <tok1>, <tok2>`. The machine token is shared with UE / Desktop / Rider — do not put it in `extraAuthTokens`. See [usage-guide §1.1](https://github.com/bytepine/NexusLink/blob/master/docs/usage-guide.md#11-身份验证).
+Multiple tokens: `Bearer <tok1>, <tok2>`. The machine token is shared with UE / Desktop / Rider — do not put it in `extraAuthTokens`. See [usage-guide §1.1](https://github.com/bytepine/NexusLink/blob/master/docs/usage-guide.en.md#11-authentication).
 
 Client presets match Desktop: **Cursor / Windsurf**, **Codex**, **Claude Code / VS Code**, **CodeBuddy**, **Cline**, and **Roo Code**. Identical formats share an option; placement instructions stay outside the copied configuration. Codex generates TOML for `~/.codex/config.toml` (or custom `CODEX_HOME`) and uses Streamable HTTP automatically; other clients generate JSON members. Claude Code uses `mcpServers` in `.mcp.json`; VS Code uses `servers` in `.vscode/mcp.json`. Replace an existing entry with the same name and preserve other settings.
 
@@ -129,7 +129,7 @@ Client presets match Desktop: **Cursor / Windsurf**, **Codex**, **Claude Code / 
 }
 ```
 
-When connected, `tools/list` merges UE tools. For concurrent multi-instance calls, pass `targetPort` in `arguments`.
+When connected, `tools/list` merges UE tools. For concurrent multi-instance calls, pass `targetPort` in `arguments`. The port must be an integer from 1024 to 65535; an invalid explicit port returns `-32602` without forwarding to the current instance or returning cached data.
 
 ---
 
@@ -145,7 +145,7 @@ Confirm `nexusMcp.enabled` is `true`, UE MCP is on, the status bar shows a proje
 
 ### Logs
 
-Click **Nexus status bar → 打开日志 (Open log)** or run **Nexus MCP: 打开日志** in the command palette to reveal the current startup's log channel, including when the proxy is disabled. Each extension startup/reload creates a new `Nexus MCP (...)` channel and file named with its startup time; old logs are preserved. VSCode/Cursor handles persistence and rotation. Use `Developer: Open Logs Folder` to retrieve the matching Nexus MCP log file.
+Click **Nexus status bar → Open Log** (`打开日志`) or run **Nexus MCP: Open Log** (`打开日志`) in the command palette to reveal the current startup's log channel, including when the proxy is disabled. Each extension startup/reload creates a new `Nexus MCP (...)` channel and file named with its startup time; old logs are preserved. VSCode/Cursor handles persistence and rotation. Use `Developer: Open Logs Folder` to retrieve the matching Nexus MCP log file.
 
 Default INFO logs include client versions, session creation and initialization, invalid or evicted sessions, HTTP rejections, SSE connections, call start/completion/duration/failure, server stop reasons and connection recovery. Match sessions by their hashed `session` value and calls by `request` within one server run. `missing_session` / `unknown_session` distinguish absent headers from unknown IDs. Tokens, complete session IDs, tool arguments and response bodies are omitted.
 
@@ -155,7 +155,7 @@ For disconnect reports, include the incident time, AI client name/version, clien
 
 ### Asset edits not on disk
 
-That is NexusLink persist behavior. See the [usage-guide FAQ](https://github.com/bytepine/NexusLink/blob/master/docs/usage-guide.md).
+That is NexusLink persist behavior. See the [usage-guide FAQ](https://github.com/bytepine/NexusLink/blob/master/docs/usage-guide.en.md).
 
 ---
 
@@ -168,6 +168,8 @@ py scripts/build_vscode.py --version <version> --output release/
 Or `npm ci && npm run build` then `npx vsce package --no-dependencies`. Debug: `npm run watch`, F5 for Extension Development Host.
 
 Before submitting, run `npm run lint` (TypeScript type checking), `npm run test:policy` (session policy and multi-instance routing), `npm run test:timing`, and `npm run test:diagnostics` (HTTP session concurrency, capacity reclamation, deletion, INFO logging and redaction). All four are required CI checks.
+
+Run `py -m unittest discover -s scripts -p 'test_build_vscode.py'` for packaging-document regression: language links, matching changelog trimming, and complete source-file restoration after success or failure.
 
 GitHub Release notes come only from `CHANGELOG.md` (`py scripts/extract_release_notes.py --version X.Y.Z --verify`). Tag: `nexus-vscode-vX.Y.Z`. Marketplace listing copy lives in [README.marketplace.md](README.marketplace.md), not this README.
 

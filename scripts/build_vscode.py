@@ -6,10 +6,10 @@ build_vscode.py — NexusVSCode 扩展打包（独立仓）
 
 说明:
     1. 临时注入 package.json version
-    2. 临时裁剪 CHANGELOG.md 为最近 5 个已发布版本（与 nexus-rider 插件页 change-notes 规则一致）
+    2. 临时裁剪中英文 CHANGELOG 为最近 5 个已发布版本，并调整包内 README 语言跳转
     3. npm ci → npm run build → vsce package
     4. 输出 nexus-mcp-vscode-<version>.vsix
-    5. 恢复 package.json version 为 0.0.0、还原完整 CHANGELOG.md
+    5. 恢复 package.json version 为 0.0.0、还原中英文 CHANGELOG 与 README
 """
 
 from __future__ import annotations
@@ -118,16 +118,25 @@ def build_vscode_extension(version: str, output_dir: str) -> str:
     root = repo_root()
     pkg_path = os.path.join(root, "package.json")
     changelog_path = os.path.join(root, "CHANGELOG.md")
+    changelog_en_path = os.path.join(root, "CHANGELOG.en.md")
     readme_path = os.path.join(root, "README.md")
+    readme_en_path = os.path.join(root, "README.en.md")
     readme_marketplace_path = os.path.join(root, "README.marketplace.md")
+    readme_marketplace_zh_path = os.path.join(root, "README.marketplace.zh.md")
     npm_cmd = "npm.cmd" if sys.platform == "win32" else "npm"
     npx_cmd = "npx.cmd" if sys.platform == "win32" else "npx"
 
     original_pkg = patch_package_json(pkg_path, version)
     original_changelog = patch_changelog(changelog_path)
+    original_changelog_en = patch_changelog(changelog_en_path)
     original_readme = patch_readme(readme_path, readme_marketplace_path)
+    original_readme_en = None
 
     try:
+        if original_readme is not None and os.path.isfile(readme_en_path) and os.path.isfile(readme_marketplace_zh_path):
+            original_readme_en = read_file(readme_en_path)
+            write_file(readme_en_path, original_readme_en.replace("(README.md)", "(README.marketplace.zh.md)", 1))
+
         print("[build] npm ci ...")
         subprocess.run([npm_cmd, "ci", "--ignore-scripts"], cwd=root, check=True)
 
@@ -154,8 +163,12 @@ def build_vscode_extension(version: str, output_dir: str) -> str:
         write_file(pkg_path, original_pkg)
         if original_changelog is not None:
             write_file(changelog_path, original_changelog)
+        if original_changelog_en is not None:
+            write_file(changelog_en_path, original_changelog_en)
         if original_readme is not None:
             write_file(readme_path, original_readme)
+        if original_readme_en is not None:
+            write_file(readme_en_path, original_readme_en)
 
 
 def main() -> int:

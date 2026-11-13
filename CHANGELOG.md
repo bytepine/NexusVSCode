@@ -1,4 +1,6 @@
-# Changelog — nexus-vscode (VSCode / Cursor 扩展)
+# 更新日志 — NexusVSCode
+
+**语言 / Language**: **简体中文** · [English](CHANGELOG.en.md)
 
 所有变更记录遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/) 格式。
 版本号遵循 [语义化版本控制](https://semver.org/lang/zh-CN/)。
@@ -6,6 +8,10 @@
 ---
 
 ## [Unreleased]
+
+### Fixed
+
+- 扩展安装包中的英文文档正确跳转到中文页面，中英文更新日志同步保留最近五个已发布版本；打包后还原源码文档。
 
 ## [2.3.3] - 2026-11-10
 
