@@ -302,7 +302,12 @@ export function structuredCloneSafe<T>(value: T): T {
     return JSON.parse(JSON.stringify(value)) as T;
 }
 
-export function contentTextLength(result: unknown): number {
-    const parsed = extractResultText(result);
-    return parsed?.text.length ?? 0;
+export function exceedsOffloadLimit(text: unknown): boolean {
+    if (typeof text !== "string" || text.length <= OFFLOAD_CHARS) return false;
+    // 字符串迭代器按 Unicode 码点计数，达到转存条件即可停止。
+    let count = 0;
+    for (const _ of text) {
+        if (++count > OFFLOAD_CHARS) return true;
+    }
+    return false;
 }

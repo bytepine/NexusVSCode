@@ -14,7 +14,7 @@ Ports and switch layers: [NexusLink usage guide](https://github.com/bytepine/Nex
 
 Editor operations, including Slate, Automation, PCG, Niagara, animation, Game Features, semantic search and scene tools, use the same MCP session identity for creation, polling and wait cancellation. Progress notifications are supported. GetEditorOperation lists owned task summaries; ControlEditorOperation requests cancellation of owned tasks that expose a stop callback, using the same session route. Task responses are never cached and writes are not retried after disconnection. Live Coding does not promise cancellation.
 
-Standard MCP PNG/JPEG screenshot blocks stay inline with their FilePath metadata. Responses containing images bypass large-text offloading and proxy caching.
+Standard MCP PNG/JPEG screenshot blocks stay inline with their FilePath metadata. Responses containing images bypass large-text offloading and proxy caching. For responses eligible for offloading, the proxy writes the full response to a temporary file and returns its path when `content[0].text` exceeds 48,000 Unicode code points. The same threshold applies to plain text and JSON text.
 
 ## Requirements
 

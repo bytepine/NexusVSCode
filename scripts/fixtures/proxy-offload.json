@@ -1,0 +1,8 @@
+[
+  {"name":"ascii_at_limit","repeatText":"a","repeatCount":48000,"prefix":"","suffix":"","hasImage":false,"offloaded":false},
+  {"name":"plain_text_over_limit","repeatText":"a","repeatCount":48001,"prefix":"","suffix":"","hasImage":false,"offloaded":true},
+  {"name":"chinese_json_under_limit","repeatText":"\u4e2d","repeatCount":20000,"prefix":"{\"t\":\"","suffix":"\"}","hasImage":false,"offloaded":false},
+  {"name":"chinese_json_over_limit","repeatText":"\u4e2d","repeatCount":47993,"prefix":"{\"t\":\"","suffix":"\"}","hasImage":false,"offloaded":true},
+  {"name":"supplementary_unicode_at_limit","repeatText":"\ud83d\ude00","repeatCount":48000,"prefix":"","suffix":"","hasImage":false,"offloaded":false},
+  {"name":"image_with_large_text","repeatText":"a","repeatCount":48001,"prefix":"{\"t\":\"","suffix":"\"}","hasImage":true,"offloaded":false}
+]

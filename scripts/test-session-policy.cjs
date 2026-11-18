@@ -210,6 +210,24 @@ assert.deepEqual(imageResult.content[1], inlineImage, "image bytes and MIME must
 assert.equal(imageResult.structuredContent.FilePath, "capture.png", "image metadata must remain available");
 assert.equal(hub.lookupFresh(imageCall, now), null, "image results must not enter snapshot cache");
 
+for (const sample of require("./fixtures/proxy-offload.json")) {
+    const text = sample.prefix + sample.repeatText.repeat(sample.repeatCount) + sample.suffix;
+    const content = [{ type: "text", text }];
+    if (sample.hasImage) content.push(inlineImage);
+    const result = { content };
+    const stored = hub.store(offloadCall, result, now);
+    if (sample.offloaded) {
+        assert.ok(stored.content[0].text !== text, sample.name);
+        const meta = JSON.parse(stored.content[0].text)._proxy;
+        assert.equal(meta.offloaded, true, sample.name);
+        const saved = fs.readFileSync(meta.path);
+        assert.equal(meta.bytes, saved.length, sample.name);
+        assert.deepEqual(JSON.parse(saved.toString("utf8")), result, sample.name);
+    } else {
+        assert.deepEqual(stored, result, sample.name);
+    }
+}
+
 async function testPauseCancellation() {
     const paused = new SessionHub();
     paused.setPaused(true);

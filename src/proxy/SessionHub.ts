@@ -9,14 +9,13 @@ import { logText } from "../util/diagnostics";
 import {
     GATE_TIMEOUT_MS,
     MAX_CACHE_ENTRIES,
-    OFFLOAD_CHARS,
     SECTION_WINDOW_MS,
     type CacheKind,
     type CallInfo,
     type GateDecision,
     type ProxyMeta,
     type WriteGateMode,
-    contentTextLength,
+    exceedsOffloadLimit,
     degradedNote,
     extractTtlMeta,
     extractResultText,
@@ -153,7 +152,7 @@ export class SessionHub {
         const content = (stored as { content?: unknown } | null)?.content;
         const hasImage = Array.isArray(content) && content.some(item =>
             item && typeof item === "object" && (item as { type?: unknown }).type === "image");
-        if (contentTextLength(stored) > OFFLOAD_CHARS && !hasImage) {
+        if (!hasImage && Array.isArray(content) && exceedsOffloadLimit(content[0]?.text)) {
             stored = this.offload(stored);
         }
         if (info.isLogWatch) return stored;
