@@ -358,7 +358,7 @@ export class NexusMcpDispatcher {
         }
         if (response.error !== undefined) {
             const err = response.error as Record<string, unknown>;
-            return makeError(id, (err.code as number) ?? INTERNAL_ERROR, (err.message as string) ?? "Unknown error");
+            return makeError(id, (err.code as number) ?? INTERNAL_ERROR, (err.message as string) ?? "Unknown error", err.data);
         }
         return makeError(id, INTERNAL_ERROR, "Invalid response from UE instance");
     }
@@ -430,13 +430,11 @@ function makeResult(id: unknown, result: unknown): string {
     });
 }
 
-function makeError(id: unknown, code: number, message: string, data?: Record<string, unknown>): string {
-    const error: Record<string, unknown> = { code, message };
-    if (data) error.data = data;
+function makeError(id: unknown, code: number, message: string, data?: unknown): string {
     return JSON.stringify({
         jsonrpc: "2.0",
         id: id ?? null,
-        error,
+        error: { code, message, data },
     });
 }
 

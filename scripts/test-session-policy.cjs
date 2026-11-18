@@ -36,6 +36,8 @@ assert.equal(legacyRead.isWrite, false);
 assert.equal(needsGate("all", legacyRead.capability, legacyRead.innerArgs), false);
 assert.equal(isWriteCapability("get_asset_blueprint"), false);
 assert.equal(defaultTtlMs("get_output_log"), 8000);
+assert.ok(parseCall("get_output_log", { disarm: true }).isWrite);
+assert.ok(parseCall("get_output_log", { collectWatch: true }).isLogWatch);
 assert.equal(defaultTtlMs("search_asset"), 60000);
 assert.ok(isDurableRead("get_asset_blueprint") && !isDurableRead("list_runtime_actors"));
 assert.ok(needsGate("destructive", "delete_asset", {}));
@@ -394,6 +396,31 @@ async function testDispatcherRouting() {
     assert.deepEqual(lastForwarded, oldBatchParams);
     await oldRequest(oldParams);
     assert.equal(forwards, 9, "legacy batches must invalidate cached reads");
+
+    const log = Arguments => oldRequest({ name: "CallCapability", arguments: { Capability: "GetOutputLog", Arguments } });
+    // 模拟旧策略留下的采集快照，实时和断线查询都应跳过。
+    const collect = parseCall("CallCapability", { Capability: "GetOutputLog", Arguments: { bCollectWatch: true } }, manager.cacheScope);
+    manager.sessionHub.store({ ...collect, isLogWatch: false }, { content: [] }, Date.now());
+    assert.equal(manager.sessionHub.lookupDegraded(collect, Date.now()), null);
+    const beforeLogs = forwards;
+    for (const args of [{}, { Watch: {} }, { bCollectWatch: true }, { bCollectWatch: true },
+        { bCollectWatch: true, bDisarm: true }, { bDisarm: true }, { Watch: {} }, {}]) {
+        assert.ok((await log(args)).result);
+    }
+    assert.equal(forwards - beforeLogs, 7, "only the repeated ordinary log query may hit cache");
+    const busy = { code: -32002, message: "EditorBusy", data: { ErrorKind: "EditorBusy", bExecuted: false, RetryAfterSeconds: 0.5 } };
+    manager.forwardToolCall = async () => ({ status: "ok", response: { error: busy } });
+    assert.deepEqual((await log({ Watch: {} })).error, busy);
+    // 开启 / 解除可能已执行，不能把丢失的响应视作重试许可。
+    manager.proxyFeedbackBuffer = { enqueue() {} };
+    manager.flushProxyFeedback = async () => {};
+    for (const args of [{ Watch: {} }, { bDisarm: true }, { bCollectWatch: true, bDisarm: true }]) {
+        let attempts = 0;
+        manager.forwardToolCall = async () => { attempts++; return { status: "disconnected" }; };
+        const response = await log(args);
+        assert.equal(attempts, 1);
+        assert.equal(response.error.data.retryable, false);
+    }
 }
 
 // 已执行却丢失响应时，代理不能再次发送写入，也不能继续提供写前快照。

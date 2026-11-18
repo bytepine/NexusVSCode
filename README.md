@@ -68,6 +68,8 @@
 
 默认连接断线后，仅只读调用会自动重连并重试一次；写入不自动重发。写入断线或超时时返回 `error.data.executionStatus="unknown"`、`retryable=false`，因为 UE 可能已执行；同时清理目标实例的相关旧缓存。请先读取 UE 实际状态，或查询编辑器操作历史，再决定是否再次提交。
 
+代理保留 UE 返回的 `error.data`，包括 `EditorBusy` 的 `bExecuted` 和 `RetryAfterSeconds`。`GetOutputLog` 的监听请求（`Watch`、`bCollectWatch=true`、`bDisarm=true`）实时转发到 UE。开启和解除监听遵循代理的写入确认设置，断线后不会自动重发。
+
 兼容已发布 2.x 的工具调用格式和当前格式，请求原样转发。新版临时目录与旧 2.x 分开，避免旧进程清理新版结果。
 
 | 命令（`Ctrl+Shift+P`） | 说明 |

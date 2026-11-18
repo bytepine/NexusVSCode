@@ -45,6 +45,7 @@ export interface CallInfo {
     cacheScope: string;
     isWrite: boolean;
     isBatch: boolean;
+    isLogWatch: boolean;
 }
 
 export interface TtlMeta {
@@ -223,8 +224,13 @@ export function parseCall(toolName: string, args?: Record<string, unknown>, inst
     const sectionArgs = { ...inner };
     delete sectionArgs[legacy ? "sections" : "Sections"];
     const sectionKey = JSON.stringify([cacheScope, toolName, capability, stableStringify(sectionArgs)]);
-    const write = isBatch || isWriteCapability(capability);
-    return { toolName, capability, innerArgs: inner, identity, sections, exactKey, identityKey, sectionKey, cacheScope, isWrite: write, isBatch };
+    const isLog = policyName(capability) === "getoutputlog";
+    const watch = inner[legacy ? "watch" : "Watch"];
+    const changesWatch = isLog && ((watch != null && typeof watch === "object" && !Array.isArray(watch))
+        || inner[legacy ? "disarm" : "bDisarm"] === true);
+    const isLogWatch = changesWatch || (isLog && inner[legacy ? "collectWatch" : "bCollectWatch"] === true);
+    const write = isBatch || changesWatch || isWriteCapability(capability);
+    return { toolName, capability, innerArgs: inner, identity, sections, exactKey, identityKey, sectionKey, cacheScope, isWrite: write, isBatch, isLogWatch };
 }
 
 export function parseJsonObject(text: string): Record<string, unknown> | null {

@@ -145,7 +145,7 @@ export class SessionHub {
             return stored;
         }
         // 项目级写入无法按资产定位；部分失败也清理本实例，避免旧快照误导读回。
-        if (info.isBatch || info.isWrite) {
+        if (info.isBatch || (info.isWrite && !info.isLogWatch)) {
             this.invalidateIdentity(info.isBatch ? "" : info.identity, info.cacheScope);
         }
         if ((stored as { isError?: boolean } | null)?.isError === true) return stored;
@@ -156,6 +156,7 @@ export class SessionHub {
         if (contentTextLength(stored) > OFFLOAD_CHARS && !hasImage) {
             stored = this.offload(stored);
         }
+        if (info.isLogWatch) return stored;
         if (ttl.ttlMs === 0) {
             // 同一读取对象的旧 All/section/degraded 快照也不能继续复用。
             for (const [key, entry] of this.cache) {
@@ -188,7 +189,7 @@ export class SessionHub {
         nowMs: number,
         allowExpired: boolean,
     ): { result: unknown; kind: CacheKind; snapshotAt: string } | null {
-        if (this.cacheBlocked(info.cacheScope)) return null;
+        if (info.isLogWatch || this.cacheBlocked(info.cacheScope)) return null;
         const exact = this.cache.get(info.exactKey);
         if (exact && this.usable(exact, nowMs, allowExpired, info.capability)) {
             this.touch(exact);

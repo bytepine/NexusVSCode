@@ -70,6 +70,8 @@ Batch calls and project-wide writes without an asset identity, including Gamepla
 
 Only read-only calls on the default connection reconnect and retry once after a disconnection; writes are never replayed automatically. A disconnected or timed-out write returns `error.data.executionStatus="unknown"` and `retryable=false`, because UE may have executed it, and invalidates related old cache entries for the target instance. Read back the actual UE state or query editor operation history before deciding whether to submit it again.
 
+The proxy preserves `error.data` from UE, including `bExecuted` and `RetryAfterSeconds` on `EditorBusy` errors. `GetOutputLog` watch requests (`Watch`, `bCollectWatch=true`, `bDisarm=true`) are forwarded to UE without using cached results. Starting and disarming a watch follow the proxy's write confirmation settings and are never replayed after a disconnection.
+
 Released 2.x and current tool-call formats are supported without rewriting requests. New payloads use a separate temporary root so older 2.x processes cannot delete them during startup cleanup.
 
 | Command (`Ctrl+Shift+P`) | Notes |
