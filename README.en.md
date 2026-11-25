@@ -16,6 +16,8 @@ Editor operations, including Slate, Automation, PCG, Niagara, animation, Game Fe
 
 Standard MCP PNG/JPEG screenshot blocks stay inline with their FilePath metadata. Responses containing images bypass large-text offloading and proxy caching. For responses eligible for offloading, the proxy writes the full response to a temporary file and returns its path when `content[0].text` exceeds 48,000 Unicode code points. The same threshold applies to plain text and JSON text.
 
+Results with `structuredContent` stay inline. On cache hits and disconnected reads, the relay puts `_proxy` in the result envelope and appends a metadata text block when a content block is present. The first text block continues to match the structured payload.
+
 ## Requirements
 
 | Component | Requirement |

@@ -283,7 +283,7 @@ export function injectProxyMeta(result: unknown, meta: ProxyMeta): unknown {
     }
     const rec = clone as Record<string, unknown>;
     const content = rec.content;
-    if (Array.isArray(content) && content.length > 0) {
+    if (!rec.structuredContent && Array.isArray(content) && content.length > 0) {
         const first = content[0] as Record<string, unknown>;
         if (first && typeof first.text === "string") {
             const obj = parseJsonObject(first.text);
@@ -295,6 +295,9 @@ export function injectProxyMeta(result: unknown, meta: ProxyMeta): unknown {
         }
     }
     rec._proxy = { ...(typeof rec._proxy === "object" && rec._proxy ? rec._proxy as object : {}), ...meta };
+    if (rec.structuredContent && Array.isArray(content) && content.length > 0) {
+        content.push({ type: "text", text: JSON.stringify({ _proxy: rec._proxy }) });
+    }
     return rec;
 }
 

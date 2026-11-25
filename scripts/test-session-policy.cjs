@@ -181,6 +181,13 @@ assert.equal(hub.lookupDegraded(a, now + 100000), null);
 
 const large = { isError: false, content: [{ type: "text", text: JSON.stringify({ payload: "x".repeat(50000), TtlSeconds: 1 }) }] };
 const offloadCall = parseCall("GetAssetBlueprint", { AssetPath: "/Game/BP", targetPort: 45000 });
+const dual = { ...large, structuredContent: JSON.parse(large.content[0].text) };
+assert.deepEqual(hub.store(offloadCall, dual, now), dual, "structured data must stay inline");
+const dualHit = wrapCached(hub.lookupFresh(offloadCall, now).result, "hit", new Date(now).toISOString());
+assert.deepEqual(JSON.parse(dualHit.content[0].text), dualHit.structuredContent);
+assert.equal(dualHit._proxy.cache, "hit");
+assert.equal(JSON.parse(dualHit.content[1].text)._proxy.cache, "hit");
+
 const file = JSON.parse(hub.store(offloadCall, large, now).content[0].text).path;
 const stale = JSON.parse(hub.store(offloadCall, large, now).content[0].text).path;
 fs.utimesSync(stale, new Date(now - 7200000), new Date(now - 7200000));
